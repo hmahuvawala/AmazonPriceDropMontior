@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:amazon_price_monitor;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  flyway:
+    enabled: false
+
+alterlab:
+  api-key: test-key
+
+slack:
+  webhook-url:
+
+app:
+  scheduler:
+    enabled: false

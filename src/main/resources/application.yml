@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: amazon-price-monitor
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:amazon_price_monitor}
+    username: ${DB_USER:monitor}
+    password: ${DB_PASSWORD:monitor}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+
+server:
+  port: ${SERVER_PORT:8080}
+
+alterlab:
+  base-url: ${ALTERLAB_BASE_URL:https://api.alterlab.io/api/v1}
+  api-key: ${ALTERLAB_API_KEY:}
+  scrape-path: /scrape
+  request-timeout-seconds: ${ALTERLAB_TIMEOUT_SECONDS:90}
+
+slack:
+  webhook-url: ${SLACK_WEBHOOK_URL:}
+
+app:
+  scheduler:
+    enabled: ${SCHEDULER_ENABLED:true}
+    interval-ms: ${SCHEDULER_INTERVAL_MS:3600000}
+  jsoup:
+    connect-timeout-ms: 10000
+    read-timeout-ms: 15000
+    user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
+
+logging:
+  level:
+    com.amazonpricemonitor: INFO

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Amazon Price Monitor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet"/>
+    <link rel="stylesheet" href="/css/app.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js" defer></script>
+    <script src="/js/app.js" defer></script>
+</head>
+<body>
+<header class="page-header">
+    <h1>Amazon Price Monitor</h1>
+    <p class="subtitle">Jsoup first, AlterLab fallback, Slack on threshold breach</p>
+</header>
+
+<main class="layout">
+    <section class="panel">
+        <h2>Tracked products</h2>
+        <ul id="product-list" class="product-list"></ul>
+        <p id="product-empty" class="muted" hidden>No products yet. Add one below.</p>
+    </section>
+
+    <section class="panel">
+        <h2>Add product</h2>
+        <form id="add-form" class="form">
+            <label>
+                Amazon URL
+                <input type="url" name="amazonUrl" required placeholder="https://www.amazon.com/dp/..."/>
+            </label>
+            <label>
+                Label (optional)
+                <input type="text" name="displayName" maxlength="512" placeholder="Kitchen gadget"/>
+            </label>
+            <label>
+                Alert when price drops at least (%)
+                <input type="number" name="thresholdPct" min="0.01" max="100" step="0.1" value="5" required/>
+            </label>
+            <button type="submit">Save product</button>
+        </form>
+        <p id="form-message" class="form-message" role="status"></p>
+    </section>
+
+    <section class="panel panel--wide">
+        <div class="chart-toolbar">
+            <h2>Price history</h2>
+            <button type="button" id="run-checks" class="secondary">Run checks now</button>
+        </div>
+        <p id="chart-hint" class="muted">Select a product to load its history.</p>
+        <div class="chart-wrap">
+            <canvas id="price-chart" height="120"></canvas>
+        </div>
+    </section>
+</main>
+</body>
+</html>

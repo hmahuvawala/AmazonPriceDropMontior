@@ -1,0 +1,300 @@
+/* Claude-inspired: warm neutrals, terracotta accent, Inter + Newsreader */
+
+:root {
+    color-scheme: light;
+    --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-heading: "Newsreader", ui-serif, Georgia, "Times New Roman", serif;
+
+    --bg: #f0efea;
+    --bg-elevated: #faf9f6;
+    --panel: #faf9f6;
+    --panel-border: #e6e5e0;
+    --text: #1c1b19;
+    --muted: #6f6e69;
+    --accent: #c45c3e;
+    --accent-ring: rgba(196, 92, 62, 0.35);
+    --btn-primary-bg: #2c2b28;
+    --btn-primary-hover: #1a1917;
+    --btn-primary-text: #faf9f6;
+    --secondary-bg: #faf9f6;
+    --secondary-border: #d4d3cd;
+    --danger-bg: #fdf2f0;
+    --danger-text: #9b3b36;
+    --danger-border: #e8c4c0;
+
+    --chart-line: #b85538;
+    --chart-fill: rgba(184, 85, 56, 0.12);
+    --chart-point-jsoup: #5a6e4e;
+    --chart-point-alter: #a84a30;
+    --chart-grid: rgba(28, 27, 25, 0.08);
+    --chart-tick: #6f6e69;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        color-scheme: dark;
+        --bg: #1f1e1d;
+        --bg-elevated: #2a2927;
+        --panel: #2a2927;
+        --panel-border: #3f3e3b;
+        --text: #f2f1ec;
+        --muted: #a3a29b;
+        --accent: #d4896c;
+        --accent-ring: rgba(212, 137, 108, 0.4);
+        --btn-primary-bg: #f2f1ec;
+        --btn-primary-hover: #e4e3dd;
+        --btn-primary-text: #1c1b19;
+        --secondary-bg: #2a2927;
+        --secondary-border: #4a4945;
+        --danger-bg: #3a2523;
+        --danger-text: #f0b4ad;
+        --danger-border: #5c3834;
+
+        --chart-line: #d4896c;
+        --chart-fill: rgba(212, 137, 108, 0.14);
+        --chart-point-jsoup: #9fb88e;
+        --chart-point-alter: #e0a68c;
+        --chart-grid: rgba(242, 241, 236, 0.08);
+        --chart-tick: #a3a29b;
+    }
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+.page-header h1,
+.panel h2,
+.chart-toolbar h2 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.page-header {
+    padding: 2rem 1.5rem 1rem;
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.page-header h1 {
+    margin: 0 0 0.4rem;
+    font-size: 1.85rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.subtitle {
+    margin: 0;
+    color: var(--muted);
+    font-family: var(--font-ui);
+    font-size: 0.95rem;
+    font-weight: 400;
+    letter-spacing: 0;
+}
+
+.layout {
+    max-width: 1100px;
+    margin: 0 auto 3rem;
+    padding: 0 1.5rem;
+    display: grid;
+    gap: 1.25rem;
+}
+
+@media (min-width: 900px) {
+    .layout {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .panel--wide {
+        grid-column: 1 / -1;
+    }
+}
+
+.panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    padding: 1.25rem 1.35rem;
+    box-shadow: 0 1px 2px rgba(28, 27, 25, 0.04);
+}
+
+.panel h2 {
+    margin: 0 0 1rem;
+    font-size: 1.2rem;
+}
+
+.product-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.product-item {
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 0.75rem 0.85rem;
+    background: var(--bg-elevated);
+}
+
+.product-item.is-selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-ring);
+}
+
+.product-title {
+    font-weight: 600;
+    font-family: var(--font-ui);
+    word-break: break-word;
+}
+
+.product-meta {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-top: 0.25rem;
+}
+
+.product-actions {
+    margin-top: 0.65rem;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.form label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.form input {
+    border-radius: 10px;
+    border: 1px solid var(--panel-border);
+    padding: 0.6rem 0.75rem;
+    background: var(--bg-elevated);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 0.95rem;
+}
+
+.form input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.form button {
+    margin-top: 0.25rem;
+    border: none;
+    border-radius: 10px;
+    padding: 0.65rem 1rem;
+    font-weight: 600;
+    font-family: var(--font-ui);
+    font-size: 0.95rem;
+    cursor: pointer;
+    background: var(--btn-primary-bg);
+    color: var(--btn-primary-text);
+    transition: background 0.15s ease;
+}
+
+.form button:hover {
+    background: var(--btn-primary-hover);
+}
+
+button.secondary {
+    background: var(--secondary-bg);
+    color: var(--text);
+    border: 1px solid var(--secondary-border);
+    border-radius: 10px;
+    padding: 0.55rem 0.9rem;
+    font-family: var(--font-ui);
+    font-weight: 500;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+button.secondary:hover {
+    background: var(--bg);
+    border-color: var(--muted);
+}
+
+button.danger {
+    background: var(--danger-bg);
+    color: var(--danger-text);
+    border: 1px solid var(--danger-border);
+    border-radius: 10px;
+    padding: 0.55rem 0.85rem;
+    font-family: var(--font-ui);
+    font-weight: 500;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+button.danger:hover {
+    filter: brightness(0.97);
+}
+
+.chart-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.chart-toolbar h2 {
+    margin: 0;
+}
+
+.chart-wrap {
+    position: relative;
+    height: 320px;
+    margin-top: 1rem;
+}
+
+.muted {
+    color: var(--muted);
+    font-size: 0.9rem;
+    font-family: var(--font-ui);
+}
+
+.form-message {
+    min-height: 1.25rem;
+    margin-top: 0.75rem;
+    font-size: 0.9rem;
+    font-family: var(--font-ui);
+    color: var(--muted);
+}
+
+.form-message--error {
+    color: var(--danger-text);
+}
