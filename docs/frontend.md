@@ -4,39 +4,37 @@ Three static files under [src/main/resources/static/](../src/main/resources/stat
 
 ## [index.html](../src/main/resources/static/index.html)
 
-- Loads Chart.js 4.4.6 from `cdn.jsdelivr.net` (CDN dependency — offline use breaks chart rendering).
-- Three `<section class="panel">` regions: tracked products list, add-product form, price-history chart with a "Run checks now" button.
-- The chart canvas is `<canvas id="price-chart" height="120">` inside a `.chart-wrap` (`height: 320px` from CSS, responsive width).
+- Loads **Inter** from Google Fonts and Chart.js 4.4.6 from `cdn.jsdelivr.net` (CDN — offline breaks the chart).
+- Shell: `.app` → `.header` + `.main` grid. Three `<section class="panel">` blocks: products list (`.product-list-scroll` fixed **300px** height, scrollable list), add form, full-width price history.
+- Section labels use `.panel__heading` (small caps, muted). Add form: URL, required **Label** (`displayName`), side-by-side **%** / **$** thresholds (at least one required — server-side), single-line hint, **Add** button.
+- Chart area: toolbar with **Checks every** (minutes, 1–10080), **Save interval** (`GET`/`PUT` `/api/admin/scheduler-settings`), **Run checks**; placeholder “Click a listing to view the chart.” until a product is chosen.
 
 ## [js/app.js](../src/main/resources/static/js/app.js)
 
-Single-file vanilla JS, no modules. Holds a tiny `state = { products, selectedId, chart }` object.
+Single-file vanilla JS. `state = { products, selectedId, chart }`.
 
-Functions:
-- `fetchJson(url, options)` — wrapper around `fetch` with JSON content-type, throws `Error(detail||statusText)` on non-OK, returns `null` on 204, parses JSON otherwise.
-- `setMessage(text, isError)` — writes into `#form-message`, toggles `.form-message--error` class.
-- `renderProductList()` — rebuilds `#product-list`; per-item buttons "History" (calls `selectProduct`) and "Remove" (calls `deleteProduct` after `window.confirm`).
-- `loadProducts()` — `GET /api/products` then re-render.
-- `selectProduct(id)` — `GET /api/products/{id}/price-history`, filters to `success && price != null`, builds Chart.js line dataset. Each point colored by method: `ALTERLAB` purple-ish, anything else green-ish (no special color for `JSOUP` vs others; only `ALTERLAB` is checked explicitly). Destroys prior chart before creating a new one.
-- `deleteProduct(id)` — `DELETE /api/products/{id}`, clears selection/chart if it was the active one, reloads list.
-- Form submit (`#add-form`) — builds payload (`amazonUrl`, `displayName||null`, `Number(thresholdPct)`, `active: true`), `POST /api/products`, resets form (and resets threshold to `5`), reloads.
-- "Run checks now" (`#run-checks`) — `POST /api/admin/run-checks`, then re-selects current product to refresh chart.
-
-Initial bootstrap: `loadProducts()` at the bottom; errors surface via `setMessage(..., true)`.
+- `fetchJson` — same-origin `fetch` + JSON; errors throw with response body text.
+- `formatThresholdSummary` — compact `5% · $10.00` (or `—` if missing).
+- `formatLastPrice` — latest successful price from API (`lastPrice` + `lastPriceCurrency`), currency-formatted; `—` if none yet.
+- `renderProductList` — each card is clickable (`<li role="button" tabindex="0">`): opens the chart; **Remove** stops propagation so delete does not select. Right column: last price + **Remove** only.
+- `selectProduct` — history API, Chart.js line (legend off, short date ticks). Point colors: AlterLab vs Jsoup.
+- Form submit — optional `thresholdPct` / `thresholdAmount` in body; success message **Added.**, **`loadProducts()`**, then **`setTimeout` 3s** → same flow as **Run checks** (`runChecksAndRefresh`: `POST /api/admin/run-checks`, `loadProducts`, **Checks complete.**, `selectProduct` if selected).
+- **Run checks** — calls **`runChecksAndRefresh()`** (same as the delayed post-add run).
+- **Save interval** — `PUT /api/admin/scheduler-settings` with `checkIntervalMs` from the minutes field; **Saved.** / errors on `#scheduler-settings-message`. Page load runs **`loadSchedulerSettings()`** beside `loadProducts()`.
 
 ## [css/app.css](../src/main/resources/static/css/app.css)
 
-Dark-themed via CSS variables under `:root`:
-- `--bg`, `--panel`, `--text`, `--muted`, `--accent`, `--danger`.
-- `color-scheme: light dark` (form controls render with native dark variant where supported).
-- Layout switches to two-column `grid-template-columns: 1fr 1fr` at `min-width: 900px`; the chart panel uses `panel--wide` to span both columns.
-- Buttons: default purple gradient, `.secondary` neutral, `.danger` red-tinted.
-- No print styles.
+Light-first palette with `prefers-color-scheme: dark` variables: white/dark surfaces, subtle borders, terracotta accent. **Inter** only for UI.
+
+- `.main` is CSS grid; two columns from ~880px; `.panel--wide` spans full width.
+- Buttons: `.btn--primary`, `.btn--secondary`, `.btn--danger`.
+- `.product-list-scroll`: fixed height, `overflow-y: auto` for many listings.
+- Chart container height ~280px.
 
 ## Conventions / things to know before changing UI
 
-- The frontend has zero auth and assumes the JSON API is same-origin.
-- There is no debounce on form submit / "Run checks now". The button can be hammered; the backend sync admin endpoint will queue.
-- Chart only plots successful checks. `FAILED` rows are returned by the API but filtered out client-side.
-- No date/timezone handling beyond `new Date(row.checkedAt).toLocaleString()` (timestamps from API are ISO-8601 UTC).
-- Chart.js is loaded via `<script defer>`, and `app.js` references the global `Chart` directly — both scripts are `defer`, so order is preserved and `Chart` is defined by the time `selectProduct` runs.
+- No auth; same-origin API.
+- No debounce on submit or run checks.
+- Chart plots successful checks only; `FAILED` rows filtered client-side.
+- `checkedAt` rendered with `toLocaleString` short date + time.
+- Chart.js + `app.js` both `defer`; global `Chart` is available when user opens a chart.

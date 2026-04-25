@@ -3,57 +3,78 @@
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>Amazon Price Monitor</title>
+    <title>Price Monitor</title>
     <link rel="preconnect" href="https://fonts.googleapis.com"/>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
     <link rel="stylesheet" href="/css/app.css"/>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js" defer></script>
     <script src="/js/app.js" defer></script>
 </head>
 <body>
-<header class="page-header">
-    <h1>Amazon Price Monitor</h1>
-    <p class="subtitle">Jsoup first, AlterLab fallback, Slack on threshold breach</p>
-</header>
+<div class="app">
+    <header class="header">
+        <h1 class="header__title">Price Monitor</h1>
+    </header>
 
-<main class="layout">
-    <section class="panel">
-        <h2>Tracked products</h2>
-        <ul id="product-list" class="product-list"></ul>
-        <p id="product-empty" class="muted" hidden>No products yet. Add one below.</p>
-    </section>
+    <main class="main">
+        <section class="panel panel--products" aria-labelledby="products-heading">
+            <h2 id="products-heading" class="panel__heading">Products</h2>
+            <div class="product-list-scroll">
+                <ul id="product-list" class="product-list"></ul>
+                <p id="product-empty" class="empty-state empty-state--scroll" hidden>No listings yet.</p>
+            </div>
+        </section>
 
-    <section class="panel">
-        <h2>Add product</h2>
-        <form id="add-form" class="form">
-            <label>
-                Amazon URL
-                <input type="url" name="amazonUrl" required placeholder="https://www.amazon.com/dp/..."/>
-            </label>
-            <label>
-                Label (optional)
-                <input type="text" name="displayName" maxlength="512" placeholder="Kitchen gadget"/>
-            </label>
-            <label>
-                Alert when price drops at least (%)
-                <input type="number" name="thresholdPct" min="0.01" max="100" step="0.1" value="5" required/>
-            </label>
-            <button type="submit">Save product</button>
-        </form>
-        <p id="form-message" class="form-message" role="status"></p>
-    </section>
+        <section class="panel" aria-labelledby="add-heading">
+            <h2 id="add-heading" class="panel__heading">Add listing</h2>
+            <form id="add-form" class="form">
+                <label class="field">
+                    <span class="field__label">Product URL</span>
+                    <input type="url" name="amazonUrl" required placeholder="https://www.amazon.com/dp/…" autocomplete="off"/>
+                </label>
+                <label class="field">
+                    <span class="field__label">Label</span>
+                    <input type="text" name="displayName" maxlength="512" required placeholder="Short name for this listing" autocomplete="off"/>
+                </label>
+                <div class="field-row">
+                    <label class="field field--half">
+                        <span class="field__label">Alert if drop ≥ (%)</span>
+                        <input type="number" name="thresholdPct" min="0.01" max="100" step="0.01" placeholder="—"/>
+                    </label>
+                    <label class="field field--half">
+                        <span class="field__label">or ≥ ($)</span>
+                        <input type="number" name="thresholdAmount" min="0.01" step="0.01" placeholder="—"/>
+                    </label>
+                </div>
+                <p class="field-hint">One or both thresholds required.</p>
+                <button type="submit" class="btn btn--primary">Add</button>
+            </form>
+            <p id="form-message" class="form-message" role="status"></p>
+        </section>
 
-    <section class="panel panel--wide">
-        <div class="chart-toolbar">
-            <h2>Price history</h2>
-            <button type="button" id="run-checks" class="secondary">Run checks now</button>
-        </div>
-        <p id="chart-hint" class="muted">Select a product to load its history.</p>
-        <div class="chart-wrap">
-            <canvas id="price-chart" height="120"></canvas>
-        </div>
-    </section>
-</main>
+        <section class="panel panel--wide" aria-labelledby="chart-heading">
+            <div class="panel__toolbar">
+                <h2 id="chart-heading" class="panel__heading">Price history</h2>
+                <div class="panel__toolbar-actions">
+                    <div class="scheduler-settings" aria-label="Scheduled check interval">
+                        <label class="scheduler-settings__label">
+                            <span class="scheduler-settings__text">Checks every</span>
+                            <input type="number" id="scheduler-interval-minutes" class="scheduler-settings__input" min="1" max="10080" step="1" title="Minutes between scheduled runs (1–10080)"/>
+                            <span class="scheduler-settings__unit">min</span>
+                        </label>
+                        <button type="button" id="save-scheduler-interval" class="btn btn--secondary">Save interval</button>
+                        <button type="button" id="run-checks" class="btn btn--secondary">Run checks</button>
+                    </div>
+                </div>
+            </div>
+            <p id="scheduler-settings-message" class="form-message form-message--toolbar" role="status"></p>
+            <p id="chart-hint" class="chart-placeholder">Click a listing to view the chart.</p>
+            <div class="chart-wrap">
+                <canvas id="price-chart" height="120" aria-label="Price over time"></canvas>
+            </div>
+        </section>
+    </main>
+</div>
 </body>
 </html>

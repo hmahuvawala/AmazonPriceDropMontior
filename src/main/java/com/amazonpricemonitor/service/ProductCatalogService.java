@@ -9,6 +9,7 @@ import com.amazonpricemonitor.web.dto.PriceHistoryPointResponse;
 import com.amazonpricemonitor.web.dto.ProductResponse;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -31,7 +32,7 @@ public class ProductCatalogService {
     @Transactional(readOnly = true)
     public List<ProductResponse> listProducts() {
         return productRepository.findAll(Sort.by(Sort.Direction.ASC, "id")).stream()
-                .map(ProductResponse::fromEntity)
+                .map(this::toProductResponseWithLastPrice)
                 .toList();
     }
 
@@ -39,11 +40,22 @@ public class ProductCatalogService {
     public ProductResponse createProduct(CreateProductRequest request) {
         MonitoredProduct entity = new MonitoredProduct();
         entity.setAmazonUrl(request.getAmazonUrl().trim());
-        entity.setDisplayName(trimToNull(request.getDisplayName()));
+        entity.setDisplayName(request.getDisplayName().trim());
         entity.setThresholdPct(request.getThresholdPct());
+        entity.setThresholdAmount(request.getThresholdAmount());
         entity.setActive(request.isActive());
         MonitoredProduct saved = productRepository.save(entity);
         return ProductResponse.fromEntity(saved);
+    }
+
+    private ProductResponse toProductResponseWithLastPrice(MonitoredProduct product) {
+        Optional<PriceCheck> latest =
+                priceCheckRepository.findFirstByProductIdAndSuccessIsTrueOrderByCreatedAtDesc(product.getId());
+        if (latest.isEmpty()) {
+            return ProductResponse.fromEntity(product);
+        }
+        PriceCheck row = latest.get();
+        return ProductResponse.fromEntity(product, row.getPriceAmount(), row.getCurrency());
     }
 
     @Transactional
@@ -63,13 +75,5 @@ public class ProductCatalogService {
         return priceCheckRepository.findByProductIdOrderByCreatedAtAsc(productId, page).stream()
                 .map(PriceHistoryPointResponse::fromEntity)
                 .toList();
-    }
-
-    private static String trimToNull(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
     }
 }

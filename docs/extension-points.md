@@ -31,7 +31,7 @@ There is no update path today — clients delete + recreate. To add one:
 Currently single-currency in practice. To do this right:
 - Stop hard-coding `"USD"` in [JsoupAmazonPriceFetcher](../src/main/java/com/amazonpricemonitor/service/JsoupAmazonPriceFetcher.java) (parse currency symbol).
 - Drop drop-detection comparison if currencies differ across checks (or convert).
-- Stop hard-coding `"USD"` in the [Slack message](../src/main/java/com/amazonpricemonitor/service/SlackNotificationService.java#L43-L48) — use `quote.currency()` (note: Slack call doesn't currently receive currency; thread it through `notifyPriceDrop` signature).
+- Stop hard-coding `"USD"` in the [Slack message](../src/main/java/com/amazonpricemonitor/service/notify/SlackNotifier.java) — use `quote.currency()` (thread through `Notifier.notifyPriceDrop` if needed).
 - `MoneyParsing.fromPlainText` mishandles EU `1.299,95` formats — see [price-fetching.md](price-fetching.md).
 
 ## Async admin trigger
@@ -42,7 +42,7 @@ Currently single-currency in practice. To do this right:
 
 ## Move Slack out of the DB transaction
 
-Today `SlackNotificationService.notifyPriceDrop` is called from inside the `@Transactional` `runChecksForActiveProducts`. A slow webhook holds the transaction. Options:
+Today `Notifier.notifyPriceDrop` (Slack implementation) is called from inside the `@Transactional` `runChecksForActiveProducts`. A slow webhook holds the transaction. Options:
 - Persist a "pending alert" row, send from a separate scheduled task.
 - Spring `ApplicationEvent` published after commit (`@TransactionalEventListener(AFTER_COMMIT)`).
 
@@ -57,7 +57,7 @@ Comparison and threshold lives in [PriceMonitoringService.checkSingleProduct](..
 
 There are none beyond `contextLoads`. Reasonable starter set:
 - `MoneyParsingTest` — pure unit, lots of edge cases.
-- `PriceMonitoringServiceTest` — `@DataJpaTest` or service-level test with mocked `CompositePriceFetcher` and `SlackNotificationService`.
+- `PriceMonitoringServiceTest` — `@DataJpaTest` or service-level test with mocked `CompositePriceFetcher` and `Notifier`.
 - `JsoupAmazonPriceFetcherTest` — feed canned HTML through `Jsoup.parse(...)` against a fake `Connection`; or extract a seam.
 - Web-layer slice tests with `@WebMvcTest(ProductController.class)`.
 

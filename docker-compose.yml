@@ -3,18 +3,46 @@ services:
     image: postgres:16-alpine
     container_name: amazon-price-monitor-db
     environment:
-      POSTGRES_USER: monitor
-      POSTGRES_PASSWORD: monitor
-      POSTGRES_DB: amazon_price_monitor
+      POSTGRES_USER: ${DB_USER:-monitor}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-monitor}
+      POSTGRES_DB: ${DB_NAME:-amazon_price_monitor}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U monitor -d amazon_price_monitor"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-monitor} -d ${DB_NAME:-amazon_price_monitor}"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+  app:
+    build: .
+    image: amazon-price-monitor:local
+    container_name: amazon-price-monitor-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-amazon_price_monitor}
+      DB_USER: ${DB_USER:-monitor}
+      DB_PASSWORD: ${DB_PASSWORD:-monitor}
+      ALTERLAB_API_KEY: ${ALTERLAB_API_KEY:-}
+      ALTERLAB_BASE_URL: ${ALTERLAB_BASE_URL:-https://api.alterlab.io/api/v1}
+      NOTIFICATION_TYPE: ${NOTIFICATION_TYPE:-log}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+      SERVER_PORT: 8080
+      SCHEDULER_ENABLED: ${SCHEDULER_ENABLED:-true}
+      SCHEDULER_INTERVAL_MS: ${SCHEDULER_INTERVAL_MS:-3600000}
+      GEMINI_ENABLED: ${GEMINI_ENABLED:-true}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
+      GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-5000}
+    restart: unless-stopped
 
 volumes:
   postgres_data:

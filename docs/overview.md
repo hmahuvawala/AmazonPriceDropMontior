@@ -1,6 +1,6 @@
 # Overview
 
-Spring Boot 3.4 / Java 21 worker + small SPA. Periodically scrapes Amazon product pages for price, persists every check, and posts to Slack when a successful price drops by ≥ a per-product threshold.
+Spring Boot 3.4 / Java 21 worker + small SPA. Periodically scrapes Amazon product pages for price, persists every check, and posts to Slack when a successful price drop meets **either** a per-product **percentage** threshold, **absolute dollar** threshold, or both (OR semantics vs the prior successful price).
 
 ## Stack
 
@@ -23,16 +23,16 @@ AmazonPriceDropMontior/
 └── src/
     ├── main/
     │   ├── java/com/amazonpricemonitor/
-    │   │   ├── AmazonPriceMonitorApplication.java   @SpringBootApplication + @EnableScheduling
+    │   │   ├── AmazonPriceMonitorApplication.java   @SpringBootApplication
     │   │   ├── config/         @ConfigurationProperties beans + RestClient.Builder
     │   │   ├── domain/         JPA entities + FetchMethod enum
     │   │   ├── repository/     Spring Data JPA repos
     │   │   ├── service/        Fetchers, monitoring orchestrator, Slack, catalog, money parsing
-    │   │   ├── scheduler/      @Scheduled trigger (gated by app.scheduler.enabled)
+    │   │   ├── scheduler/      programmatic fixed-delay trigger (gated by app.scheduler.enabled)
     │   │   └── web/            REST controllers + DTOs + GlobalExceptionHandler
     │   └── resources/
     │       ├── application.yml
-    │       ├── db/migration/V1__init.sql
+    │       ├── db/migration/V1__init.sql, V2__…, V3__scheduler_settings.sql
     │       └── static/         index.html, css/app.css, js/app.js
     └── test/
         ├── java/.../AmazonPriceMonitorApplicationTests.java   contextLoads only
@@ -44,10 +44,10 @@ The git folder name `AmazonPriceDropMontior` is misspelled on disk — keep it; 
 ## Request/data flow
 
 ### Scheduled price check (default path)
-1. [PriceCheckScheduler.runScheduledChecks](../src/main/java/com/amazonpricemonitor/scheduler/PriceCheckScheduler.java#L24) — fixed delay (default 1h), initial delay 60s. Bean is `@ConditionalOnProperty app.scheduler.enabled=true`.
+1. [PriceCheckScheduler](../src/main/java/com/amazonpricemonitor/scheduler/PriceCheckScheduler.java) — after `ApplicationReadyEvent`, first run after **60s**, then fixed delay from `scheduler_settings.check_interval_ms` after each completion. Bean is `@ConditionalOnProperty app.scheduler.enabled=true`.
 2. [PriceMonitoringService.runChecksForActiveProducts](../src/main/java/com/amazonpricemonitor/service/PriceMonitoringService.java#L42) — loads `MonitoredProduct.active=true`, iterates, swallows per-product `RuntimeException` and writes a `FAILED` row.
 3. For each product: read previous successful price → [CompositePriceFetcher.fetchWithFallback](../src/main/java/com/amazonpricemonitor/service/CompositePriceFetcher.java#L21) → Jsoup, then AlterLab.
-4. On success: persist `PriceCheck(success=true, ...)`. Compute drop% vs prior successful. If `≥ thresholdPct`, [SlackNotificationService.notifyPriceDrop](../src/main/java/com/amazonpricemonitor/service/SlackNotificationService.java#L29).
+4. On success: persist `PriceCheck(success=true, ...)`. Compute drop% and drop amount vs prior successful. If **either** threshold is configured and met (`pctTriggered || absTriggered`), [`Notifier.notifyPriceDrop`](../src/main/java/com/amazonpricemonitor/service/notify/Notifier.java) (implementation selected by `app.notification.type`: log / slack / noop).
 5. On both-fetcher failure: persist `PriceCheck(success=false, fetchMethod=FAILED, errorMessage=...)`.
 
 ### Manual trigger

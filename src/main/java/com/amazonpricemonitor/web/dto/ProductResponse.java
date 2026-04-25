@@ -9,18 +9,29 @@ public record ProductResponse(
         String amazonUrl,
         String displayName,
         BigDecimal thresholdPct,
+        BigDecimal thresholdAmount,
         boolean active,
         Instant createdAt,
-        Instant updatedAt) {
+        Instant updatedAt,
+        BigDecimal lastPrice,
+        String lastPriceCurrency) {
 
     public static ProductResponse fromEntity(MonitoredProduct entity) {
+        return fromEntity(entity, null, null);
+    }
+
+    public static ProductResponse fromEntity(
+            MonitoredProduct entity, BigDecimal lastPrice, String lastPriceCurrency) {
         return new ProductResponse(
                 entity.getId(),
                 entity.getAmazonUrl(),
                 entity.getDisplayName(),
                 entity.getThresholdPct(),
+                entity.getThresholdAmount(),
                 entity.isActive(),
                 entity.getCreatedAt(),
-                entity.getUpdatedAt());
+                entity.getUpdatedAt(),
+                lastPrice,
+                lastPriceCurrency);
     }
 }

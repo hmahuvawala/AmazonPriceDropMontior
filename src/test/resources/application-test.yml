@@ -10,12 +10,28 @@ spring:
   flyway:
     enabled: false
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
 alterlab:
   api-key: test-key
 
-slack:
-  webhook-url:
-
 app:
+  notification:
+    type: noop
+    slack:
+      webhook-url:
   scheduler:
     enabled: false
+  ai:
+    gemini:
+      # Tests must stay deterministic and offline; the deterministic fallback summary
+      # is exercised instead of any real upstream call.
+      enabled: false
+      api-key:

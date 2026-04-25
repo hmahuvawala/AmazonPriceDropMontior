@@ -25,8 +25,11 @@ public class MonitoredProduct {
     @Column(name = "display_name", length = 512)
     private String displayName;
 
-    @Column(name = "threshold_pct", nullable = false, precision = 5, scale = 2)
+    @Column(name = "threshold_pct", precision = 5, scale = 2)
     private BigDecimal thresholdPct;
+
+    @Column(name = "threshold_amount", precision = 12, scale = 2)
+    private BigDecimal thresholdAmount;
 
     @Column(name = "active", nullable = false)
     private boolean active = true;
@@ -75,6 +78,14 @@ public class MonitoredProduct {
 
     public void setThresholdPct(BigDecimal thresholdPct) {
         this.thresholdPct = thresholdPct;
+    }
+
+    public BigDecimal getThresholdAmount() {
+        return thresholdAmount;
+    }
+
+    public void setThresholdAmount(BigDecimal thresholdAmount) {
+        this.thresholdAmount = thresholdAmount;
     }
 
     public boolean isActive() {

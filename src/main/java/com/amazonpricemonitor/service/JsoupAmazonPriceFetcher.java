@@ -41,22 +41,7 @@ public class JsoupAmazonPriceFetcher {
                     .header("Accept-Language", "en-US,en;q=0.9")
                     .get();
 
-            for (String selector : PRICE_SELECTORS) {
-                Element element = document.selectFirst(selector);
-                if (element == null) {
-                    continue;
-                }
-                String text = element.hasAttr("value") ? element.attr("value") : element.text();
-                Optional<java.math.BigDecimal> parsed = MoneyParsing.fromPlainText(text);
-                if (parsed.isEmpty()) {
-                    parsed = MoneyParsing.firstNumberIn(text);
-                }
-                if (parsed.isPresent() && parsed.get().signum() > 0) {
-                    return Optional.of(new PriceQuote(parsed.get(), "USD", FetchMethod.JSOUP));
-                }
-            }
-            log.debug("Jsoup could not locate a price for url={}", productUrl);
-            return Optional.empty();
+            return parsePriceFromDocument(document);
         } catch (IOException ex) {
             log.debug("Jsoup fetch failed for url={}: {}", productUrl, ex.toString());
             return Optional.empty();
@@ -64,5 +49,27 @@ public class JsoupAmazonPriceFetcher {
             log.debug("Jsoup parse failed for url={}: {}", productUrl, ex.toString());
             return Optional.empty();
         }
+    }
+
+    /**
+     * Parses an already-fetched document (no network). Used by tests with HTML fixtures.
+     */
+    Optional<PriceQuote> parsePriceFromDocument(Document document) {
+        for (String selector : PRICE_SELECTORS) {
+            Element element = document.selectFirst(selector);
+            if (element == null) {
+                continue;
+            }
+            String text = element.hasAttr("value") ? element.attr("value") : element.text();
+            Optional<java.math.BigDecimal> parsed = MoneyParsing.fromPlainText(text);
+            if (parsed.isEmpty()) {
+                parsed = MoneyParsing.firstNumberIn(text);
+            }
+            if (parsed.isPresent() && parsed.get().signum() > 0) {
+                return Optional.of(new PriceQuote(parsed.get(), "USD", FetchMethod.JSOUP));
+            }
+        }
+        log.debug("Jsoup could not locate a price in document");
+        return Optional.empty();
     }
 }
