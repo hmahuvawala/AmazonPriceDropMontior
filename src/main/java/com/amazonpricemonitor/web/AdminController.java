@@ -3,10 +3,13 @@ package com.amazonpricemonitor.web;
 import com.amazonpricemonitor.config.AdminProperties;
 import com.amazonpricemonitor.domain.FetchMethod;
 import com.amazonpricemonitor.domain.MonitoredProduct;
+import com.amazonpricemonitor.service.NotificationRecipientsService;
 import com.amazonpricemonitor.service.PriceMonitoringService;
 import com.amazonpricemonitor.service.SchedulerSettingsService;
 import com.amazonpricemonitor.service.notify.Notifier;
+import com.amazonpricemonitor.web.dto.NotificationRecipientsResponse;
 import com.amazonpricemonitor.web.dto.SchedulerSettingsResponse;
+import com.amazonpricemonitor.web.dto.UpdateNotificationRecipientsRequest;
 import com.amazonpricemonitor.web.dto.UpdateSchedulerSettingsRequest;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
@@ -28,16 +31,19 @@ public class AdminController {
 
     private final PriceMonitoringService priceMonitoringService;
     private final SchedulerSettingsService schedulerSettingsService;
+    private final NotificationRecipientsService notificationRecipientsService;
     private final Notifier notifier;
     private final AdminProperties adminProperties;
 
     public AdminController(
             PriceMonitoringService priceMonitoringService,
             SchedulerSettingsService schedulerSettingsService,
+            NotificationRecipientsService notificationRecipientsService,
             Notifier notifier,
             AdminProperties adminProperties) {
         this.priceMonitoringService = priceMonitoringService;
         this.schedulerSettingsService = schedulerSettingsService;
+        this.notificationRecipientsService = notificationRecipientsService;
         this.notifier = notifier;
         this.adminProperties = adminProperties;
     }
@@ -89,5 +95,22 @@ public class AdminController {
     public SchedulerSettingsResponse putSchedulerSettings(@Valid @RequestBody UpdateSchedulerSettingsRequest body) {
         schedulerSettingsService.updateCheckIntervalMs(body.checkIntervalMs());
         return new SchedulerSettingsResponse(schedulerSettingsService.getCheckIntervalMs());
+    }
+
+    @GetMapping("/notification-recipients")
+    public NotificationRecipientsResponse getNotificationRecipients() {
+        return new NotificationRecipientsResponse(
+                notificationRecipientsService.getEmailToCsv(),
+                notificationRecipientsService.getSmsToCsv());
+    }
+
+    @PutMapping("/notification-recipients")
+    public NotificationRecipientsResponse putNotificationRecipients(
+            @RequestBody UpdateNotificationRecipientsRequest body) {
+        notificationRecipientsService.updateEmailRecipients(body.emailToCsv());
+        notificationRecipientsService.updateSmsRecipients(body.smsToCsv());
+        return new NotificationRecipientsResponse(
+                notificationRecipientsService.getEmailToCsv(),
+                notificationRecipientsService.getSmsToCsv());
     }
 }

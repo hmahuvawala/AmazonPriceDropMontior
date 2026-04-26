@@ -1,5 +1,6 @@
 package com.amazonpricemonitor.config;
 
+import com.amazonpricemonitor.service.NotificationRecipientsService;
 import com.amazonpricemonitor.service.ai.GeminiProperties;
 import com.amazonpricemonitor.service.notify.EmailNotifier;
 import com.amazonpricemonitor.service.notify.SmsNotifier;
@@ -27,8 +28,11 @@ public class AppConfiguration {
 
     @Bean
     @ConditionalOnProperty(name = "app.notification.email.enabled", havingValue = "true")
-    public EmailNotifier emailNotifier(EmailProperties emailProperties, JavaMailSender javaMailSender) {
-        return new EmailNotifier(emailProperties, javaMailSender);
+    public EmailNotifier emailNotifier(
+            EmailProperties emailProperties,
+            NotificationRecipientsService recipientsService,
+            JavaMailSender javaMailSender) {
+        return new EmailNotifier(emailProperties, recipientsService, javaMailSender);
     }
 
     @Bean
@@ -65,8 +69,10 @@ public class AppConfiguration {
     @Bean
     @ConditionalOnProperty(name = "app.notification.sms.enabled", havingValue = "true")
     public SmsNotifier smsNotifier(
-            SmsProperties smsProperties, @Qualifier("twilioRestClient") RestClient twilioRestClient) {
-        return new SmsNotifier(smsProperties, twilioRestClient);
+            SmsProperties smsProperties,
+            NotificationRecipientsService recipientsService,
+            @Qualifier("twilioRestClient") RestClient twilioRestClient) {
+        return new SmsNotifier(smsProperties, recipientsService, twilioRestClient);
     }
 
     @Bean(name = "priceCheckTaskScheduler")

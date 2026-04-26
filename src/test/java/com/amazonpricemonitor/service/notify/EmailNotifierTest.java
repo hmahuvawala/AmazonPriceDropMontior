@@ -4,11 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.amazonpricemonitor.config.EmailProperties;
 import com.amazonpricemonitor.domain.FetchMethod;
 import com.amazonpricemonitor.domain.MonitoredProduct;
+import com.amazonpricemonitor.service.NotificationRecipientsService;
 import java.math.BigDecimal;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +27,9 @@ class EmailNotifierTest {
     @Mock
     private JavaMailSender javaMailSender;
 
+    @Mock
+    private NotificationRecipientsService recipientsService;
+
     private EmailProperties emailProperties;
 
     @BeforeEach
@@ -31,13 +37,14 @@ class EmailNotifierTest {
         emailProperties = new EmailProperties();
         emailProperties.setEnabled(true);
         emailProperties.setFrom("alerts@example.com");
-        emailProperties.setTo("user1@example.com,user2@example.com");
         emailProperties.setSubjectPrefix("CustomPrefix");
     }
 
     @Test
     void sendsPlainTextWithPriceFactsAndListingUrl() {
-        EmailNotifier notifier = new EmailNotifier(emailProperties, javaMailSender);
+        when(recipientsService.getEmailRecipients())
+                .thenReturn(List.of("user1@example.com", "user2@example.com"));
+        EmailNotifier notifier = new EmailNotifier(emailProperties, recipientsService, javaMailSender);
         MonitoredProduct product = product("https://amazon.example/dp/B00", "Widget");
 
         notifier.notifyPriceDrop(
@@ -68,7 +75,9 @@ class EmailNotifierTest {
 
     @Test
     void appendsAiSummaryWhenPresent() {
-        EmailNotifier notifier = new EmailNotifier(emailProperties, javaMailSender);
+        when(recipientsService.getEmailRecipients())
+                .thenReturn(List.of("user1@example.com", "user2@example.com"));
+        EmailNotifier notifier = new EmailNotifier(emailProperties, recipientsService, javaMailSender);
         MonitoredProduct product = product("https://amazon.example/dp/B01", null);
 
         notifier.notifyPriceDrop(
@@ -89,9 +98,28 @@ class EmailNotifierTest {
     }
 
     @Test
-    void skipsSendWhenFromOrToMissing() {
+    void skipsSendWhenFromMissing() {
         emailProperties.setFrom("");
-        EmailNotifier notifier = new EmailNotifier(emailProperties, javaMailSender);
+        EmailNotifier notifier = new EmailNotifier(emailProperties, recipientsService, javaMailSender);
+        MonitoredProduct product = product("https://a.example/x", "X");
+
+        notifier.notifyPriceDrop(
+                product,
+                BigDecimal.TEN,
+                BigDecimal.ONE,
+                BigDecimal.TEN,
+                BigDecimal.TEN,
+                "x",
+                FetchMethod.JSOUP,
+                null);
+
+        verify(javaMailSender, never()).send(any(SimpleMailMessage.class));
+    }
+
+    @Test
+    void skipsSendWhenRecipientsEmpty() {
+        when(recipientsService.getEmailRecipients()).thenReturn(List.of());
+        EmailNotifier notifier = new EmailNotifier(emailProperties, recipientsService, javaMailSender);
         MonitoredProduct product = product("https://a.example/x", "X");
 
         notifier.notifyPriceDrop(

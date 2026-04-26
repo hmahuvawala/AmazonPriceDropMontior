@@ -3,6 +3,7 @@ package com.amazonpricemonitor.service.notify;
 import com.amazonpricemonitor.config.EmailProperties;
 import com.amazonpricemonitor.domain.FetchMethod;
 import com.amazonpricemonitor.domain.MonitoredProduct;
+import com.amazonpricemonitor.service.NotificationRecipientsService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
@@ -18,10 +19,15 @@ public class EmailNotifier implements ChannelNotifier {
     private static final Logger log = LoggerFactory.getLogger(EmailNotifier.class);
 
     private final EmailProperties emailProperties;
+    private final NotificationRecipientsService recipientsService;
     private final JavaMailSender javaMailSender;
 
-    public EmailNotifier(EmailProperties emailProperties, JavaMailSender javaMailSender) {
+    public EmailNotifier(
+            EmailProperties emailProperties,
+            NotificationRecipientsService recipientsService,
+            JavaMailSender javaMailSender) {
         this.emailProperties = emailProperties;
+        this.recipientsService = recipientsService;
         this.javaMailSender = javaMailSender;
     }
 
@@ -35,7 +41,8 @@ public class EmailNotifier implements ChannelNotifier {
             String thresholdTriggers,
             FetchMethod method,
             String aiSummary) {
-        if (!emailProperties.isConfigured()) {
+        List<String> toList = recipientsService.getEmailRecipients();
+        if (!emailProperties.hasFrom() || toList.isEmpty()) {
             MDC.put("event", "notification.failed");
             MDC.put("channel", "email");
             MDC.put("reason", "not_configured");
@@ -68,7 +75,6 @@ public class EmailNotifier implements ChannelNotifier {
 
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(emailProperties.getFrom());
-        List<String> toList = emailProperties.getToAddresses();
         message.setTo(toList.toArray(new String[0]));
         message.setSubject(subject);
         message.setText(body);

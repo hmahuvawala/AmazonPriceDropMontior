@@ -177,6 +177,38 @@ body {
     min-height: 0;
 }
 
+.recipients {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.recipients__field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1 1 18rem;
+    min-width: 0;
+}
+
+.recipients__label {
+    font-size: 0.75rem;
+    color: var(--muted);
+}
+
+.recipients__input {
+    width: 100%;
+    padding: 0.4rem 0.55rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.8125rem;
+}
+
 .panel--products .panel__heading {
     margin-bottom: 0.5rem;
 }

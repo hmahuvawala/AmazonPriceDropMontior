@@ -64,10 +64,22 @@ function setSchedulerSettingsMessage(text, isError = false) {
     el.classList.toggle("form-message--error", Boolean(isError && text));
 }
 
+function setRecipientsMessage(text, isError = false) {
+    const el = document.getElementById("recipients-message");
+    el.textContent = text || "";
+    el.classList.toggle("form-message--error", Boolean(isError && text));
+}
+
 async function loadSchedulerSettings() {
     const s = await fetchJson("/api/admin/scheduler-settings");
     const input = document.getElementById("scheduler-interval-minutes");
     input.value = String(Math.round(s.checkIntervalMs / 60000));
+}
+
+async function loadRecipients() {
+    const r = await fetchJson("/api/admin/notification-recipients");
+    document.getElementById("email-recipients").value = r.emailToCsv || "";
+    document.getElementById("sms-recipients").value = r.smsToCsv || "";
 }
 
 function renderProductList() {
@@ -278,6 +290,22 @@ document.getElementById("run-checks").addEventListener("click", async () => {
     }
 });
 
+document.getElementById("save-recipients").addEventListener("click", async () => {
+    const emailToCsv = document.getElementById("email-recipients").value.trim();
+    const smsToCsv = document.getElementById("sms-recipients").value.trim();
+    try {
+        const updated = await fetchJson("/api/admin/notification-recipients", {
+            method: "PUT",
+            body: JSON.stringify({emailToCsv, smsToCsv}),
+        });
+        document.getElementById("email-recipients").value = updated.emailToCsv || "";
+        document.getElementById("sms-recipients").value = updated.smsToCsv || "";
+        setRecipientsMessage("Saved.");
+    } catch (error) {
+        setRecipientsMessage(error.message, true);
+    }
+});
+
 document.getElementById("save-scheduler-interval").addEventListener("click", async () => {
     const input = document.getElementById("scheduler-interval-minutes");
     const minutes = Number(input.value);
@@ -298,7 +326,8 @@ document.getElementById("save-scheduler-interval").addEventListener("click", asy
     }
 });
 
-Promise.all([loadProducts(), loadSchedulerSettings()]).catch((error) => {
+Promise.all([loadProducts(), loadSchedulerSettings(), loadRecipients()]).catch((error) => {
     setMessage(error.message, true);
     setSchedulerSettingsMessage(error.message, true);
+    setRecipientsMessage(error.message, true);
 });

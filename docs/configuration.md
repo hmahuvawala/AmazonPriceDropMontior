@@ -19,10 +19,10 @@ All runtime config lives in [application.yml](../src/main/resources/application.
 | `app.admin.allow-test-notification` | `ADMIN_ALLOW_TEST_NOTIFICATION` | `false` | When `true`, enables `POST /api/admin/send-test-notification` (synthetic notifier probe; **no auth** — keep `false` in production) |
 | `app.notification.log.enabled` | `NOTIFY_LOG_ENABLED` | `true` | [LogNotifier](../src/main/java/com/amazonpricemonitor/service/notify/LogNotifier.java) — structured INFO lines on alerts |
 | `app.notification.email.enabled` | `NOTIFY_EMAIL_ENABLED` | `false` | [EmailNotifier](../src/main/java/com/amazonpricemonitor/service/notify/EmailNotifier.java); also needs `spring.mail.*` / `MAIL_*` so `JavaMailSender` auto-configures |
-| `app.notification.email.from` / `to` | `NOTIFY_EMAIL_FROM`, `NOTIFY_EMAIL_TO` | *(empty)* | Comma-separated `to` addresses |
+| `app.notification.email.from` | `NOTIFY_EMAIL_FROM` | *(empty)* | Sender address. **Recipients** (`to`) are no longer env-driven — they live in the DB; see [Notification recipients](#notification-recipients). |
 | `app.notification.email.subject-prefix` | `NOTIFY_EMAIL_SUBJECT_PREFIX` | *(blank → default `[Amazon Price Monitor]` in code)* | Email subject prefix |
 | `app.notification.sms.enabled` | `NOTIFY_SMS_ENABLED` | `false` | [SmsNotifier](../src/main/java/com/amazonpricemonitor/service/notify/SmsNotifier.java) (Twilio) |
-| `app.notification.sms.*` | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM`, `NOTIFY_SMS_TO`, `TWILIO_BASE_URL`, `NOTIFY_SMS_TIMEOUT_MS` | — | Twilio REST + comma-separated SMS recipients |
+| `app.notification.sms.*` | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM`, `TWILIO_BASE_URL`, `NOTIFY_SMS_TIMEOUT_MS` | — | Twilio REST credentials + sender. **Recipients** (`to`) are no longer env-driven — they live in the DB; see [Notification recipients](#notification-recipients). |
 | `spring.mail.*` | `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_SMTP_AUTH`, `MAIL_SMTP_STARTTLS_ENABLE`, `MAIL_CONNECTION_TIMEOUT_MS`, `MAIL_TIMEOUT_MS` | see [application.yml](../src/main/resources/application.yml) | Required when email alerts are enabled (`NOTIFY_EMAIL_ENABLED=true` and non-blank host) |
 | `app.scheduler.enabled` | `SCHEDULER_ENABLED` | `true` | gates [PriceCheckScheduler](../src/main/java/com/amazonpricemonitor/scheduler/PriceCheckScheduler.java) bean via `@ConditionalOnProperty` |
 | `app.scheduler.interval-ms` | `SCHEDULER_INTERVAL_MS` | `3600000` (1h) | default when [SchedulerSettingsService](../src/main/java/com/amazonpricemonitor/service/SchedulerSettingsService.java) creates the singleton `scheduler_settings` row (e.g. H2 tests without Flyway). **Production** interval is stored in the DB (Flyway V3 seed + UI / `PUT /api/admin/scheduler-settings`). |
@@ -41,12 +41,20 @@ All runtime config lives in [application.yml](../src/main/resources/application.
 
 `.env.example` mirrors the above and is what the README points users at.
 
+## Notification recipients
+
+Recipient lists (email addresses and SMS phone numbers) are **not** env-var driven. They live in the singleton `notification_recipients` row (`id=1`), seeded empty by [Flyway V4](../src/main/resources/db/migration/V4__notification_recipients.sql) and edited via the SPA or `PUT /api/admin/notification-recipients` (see [api.md › Notification recipients](api.md#notification-recipients-json)).
+
+- [`NotificationRecipientsService`](../src/main/java/com/amazonpricemonitor/service/NotificationRecipientsService.java) trims entries, drops blanks, validates emails against `^[^\s@]+@[^\s@]+\.[^\s@]+$` and phones as **E.164** (`^\+[1-9]\d{6,14}$`), and caps CSVs at **4000** chars (email) / **500** chars (SMS).
+- For H2-based tests where Flyway is disabled, `NotificationRecipientsService.ensureDefaultRowIfMissing` creates the row on demand.
+- Channels still gate on the `*.enabled` flags above; an empty recipient list short-circuits the channel with `notification.failed` (`reason=not_configured`) even when otherwise enabled.
+
 ## Behavior gates
 
 - **Scheduler off**: set `SCHEDULER_ENABLED=false` (or `app.scheduler.enabled: false`). The bean is conditionally created. Manual `POST /api/admin/run-checks` still works.
-- **Notifications**: enable any mix of **log** (default on), **email** (`NOTIFY_EMAIL_ENABLED=true` + `MAIL_*` + from/to), and **SMS** (`NOTIFY_SMS_ENABLED=true` + Twilio env vars). Set `NOTIFY_LOG_ENABLED=false` (and disable email/SMS) to silence all notifier output — `CompositeNotifier` then has no delegates.
-- **Email with missing config**: `NOTIFY_EMAIL_ENABLED=true` but blank `from`/`to` skips send and emits **WARN** `notification.failed` (`reason=not_configured`); checks still run and persist.
-- **SMS with missing Twilio config**: same pattern with `reason=not_configured`.
+- **Notifications**: enable any mix of **log** (default on), **email** (`NOTIFY_EMAIL_ENABLED=true` + `MAIL_*` + non-blank `NOTIFY_EMAIL_FROM` + at least one DB-stored email recipient), and **SMS** (`NOTIFY_SMS_ENABLED=true` + Twilio creds/`TWILIO_FROM` + at least one DB-stored E.164 phone). Set `NOTIFY_LOG_ENABLED=false` (and disable email/SMS) to silence all notifier output — `CompositeNotifier` then has no delegates.
+- **Email with missing config**: `NOTIFY_EMAIL_ENABLED=true` but blank `from` **or** empty `notification_recipients.email_to_csv` skips send and emits **WARN** `notification.failed` (`reason=not_configured`); checks still run and persist.
+- **SMS with missing config**: `NOTIFY_SMS_ENABLED=true` but missing Twilio creds (`account-sid` / `auth-token` / `from`) **or** empty `notification_recipients.sms_to_csv` → same `reason=not_configured` pattern.
 - **AlterLab off**: leave `ALTERLAB_API_KEY` empty. `AlterLabPriceClient.fetch` logs WARN and returns `Optional.empty()`; if Jsoup also fails, the row is `FAILED`.
 - **Gemini off**: leave `GEMINI_API_KEY` empty (or set `GEMINI_ENABLED=false`). The deterministic fallback summary still ships on every alert — no outbound HTTP, no upstream dependency on the alert path. See [Monitoring & alerts › AI-assisted change summary](monitoring-and-alerts.md#ai-assisted-change-summary).
 

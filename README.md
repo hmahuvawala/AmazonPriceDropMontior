@@ -69,8 +69,9 @@ Environment variables map to `src/main/resources/application.yml`. See `.env.exa
 
 - **`ALTERLAB_API_KEY`**: required for AlterLab fallback ([docs](https://alterlab.io/docs/api/rest)).
 - **`NOTIFY_LOG_ENABLED`**: default `true` — structured **INFO** `notification.sent` lines on threshold breaches.
-- **`NOTIFY_EMAIL_ENABLED`** + **`MAIL_*`** + **`NOTIFY_EMAIL_FROM` / `NOTIFY_EMAIL_TO`**: SMTP via Spring Mail when enabled and configured.
-- **`NOTIFY_SMS_ENABLED`** + **`TWILIO_*`** + **`NOTIFY_SMS_TO`**: Twilio SMS when enabled and configured. SMS bodies are capped at ~320 characters (AI summary truncated if needed).
+- **`NOTIFY_EMAIL_ENABLED`** + **`MAIL_*`** + **`NOTIFY_EMAIL_FROM`**: SMTP via Spring Mail when enabled and configured.
+- **`NOTIFY_SMS_ENABLED`** + **`TWILIO_*`** (incl. `TWILIO_FROM`): Twilio SMS when enabled and configured. SMS bodies are capped at ~320 characters (AI summary truncated if needed).
+- **Recipients (email addresses + SMS phone numbers)** are stored in the DB (`notification_recipients` row, seeded empty by Flyway V4) and edited via the SPA or `PUT /api/admin/notification-recipients`. They are validated on save (RFC-style email regex, **E.164** phones). An empty list short-circuits that channel with `notification.failed` (`reason=not_configured`) even when the channel is otherwise enabled.
 - Turn **all** channels off with `NOTIFY_LOG_ENABLED=false` and email/SMS disabled — no notifier output (checks still run).
 - **`SCHEDULER_INTERVAL_MS`**: default delay in milliseconds when the `scheduler_settings` row is first created without Flyway (default 1 hour). The **live** interval is stored in the database and can be changed in the UI (**Checks every … min** → **Save interval**). First scheduled run still starts **60s** after boot; the **3s** post-add check in the SPA is unchanged.
 - **`SCHEDULER_ENABLED=false`**: turns off the background scheduler (useful with tests or manual-only runs).
@@ -88,12 +89,20 @@ Environment variables map to `src/main/resources/application.yml`. See `.env.exa
 | POST | `/api/admin/send-test-notification` | **Optional:** when `ADMIN_ALLOW_TEST_NOTIFICATION=true`, sends one **synthetic** price-drop notification through the real notifier (email/SMS/log) without changing the database — use to verify SMTP/Twilio. Returns **404** when disabled. |
 | GET | `/api/admin/scheduler-settings` | Current scheduled check interval (`checkIntervalMs`) |
 | PUT | `/api/admin/scheduler-settings` | Set interval (`{"checkIntervalMs": 3600000}` — min 60s, max 7 days) |
+| GET | `/api/admin/notification-recipients` | Current email + SMS recipient CSVs (`{"emailToCsv": "...", "smsToCsv": "..."}`) |
+| PUT | `/api/admin/notification-recipients` | Replace recipients. Same shape; emails validated by regex, phones must be **E.164**. 400 on invalid input. |
 
 ### Verify email / SMS without a real price drop
 
-1. Set **`ADMIN_ALLOW_TEST_NOTIFICATION=true`** in `.env.local` (or export it), restart the app, and ensure email/SMS env vars are set as usual.
-2. Call **`POST http://localhost:8080/api/admin/send-test-notification`** (e.g. `curl -X POST http://localhost:8080/api/admin/send-test-notification`).
-3. **Success signals:** JSON `{"status":"dispatched",...}` and **202**; logs show **`notification.sent`** (`channel=email` / `sms` / `log`) or **`notification.failed`** with a reason; check the recipient inbox/phone.
+1. **Add at least one recipient** via `PUT /api/admin/notification-recipients` (or the SPA) — without one, the channel short-circuits with `reason=not_configured` regardless of credentials. Example:
+   ```bash
+   curl -X PUT http://localhost:8080/api/admin/notification-recipients \
+        -H 'Content-Type: application/json' \
+        -d '{"emailToCsv":"you@example.com","smsToCsv":"+15551231234"}'
+   ```
+2. Set **`ADMIN_ALLOW_TEST_NOTIFICATION=true`** in `.env.local` (or export it), restart the app, and ensure email/SMS env vars are set as usual (creds + `*_FROM`).
+3. Call **`POST http://localhost:8080/api/admin/send-test-notification`** (e.g. `curl -X POST http://localhost:8080/api/admin/send-test-notification`).
+4. **Success signals:** JSON `{"status":"dispatched",...}` and **202**; logs show **`notification.sent`** (`channel=email` / `sms` / `log`) or **`notification.failed`** with a reason; check the recipient inbox/phone.
 
 ## Architecture notes
 

@@ -59,14 +59,12 @@ app:
     email:
       enabled: ${NOTIFY_EMAIL_ENABLED:false}
       from: ${NOTIFY_EMAIL_FROM:}
-      to: ${NOTIFY_EMAIL_TO:}
       subject-prefix: ${NOTIFY_EMAIL_SUBJECT_PREFIX:}
     sms:
       enabled: ${NOTIFY_SMS_ENABLED:false}
       account-sid: ${TWILIO_ACCOUNT_SID:}
       auth-token: ${TWILIO_AUTH_TOKEN:}
       from: ${TWILIO_FROM:}
-      to: ${NOTIFY_SMS_TO:}
       base-url: ${TWILIO_BASE_URL:https://api.twilio.com/2010-04-01}
       timeout-ms: ${NOTIFY_SMS_TIMEOUT_MS:5000}
   scheduler:

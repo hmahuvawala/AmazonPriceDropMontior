@@ -1,8 +1,5 @@
 package com.amazonpricemonitor.config;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "app.notification.sms")
@@ -15,9 +12,6 @@ public class SmsProperties {
     private String authToken = "";
 
     private String from = "";
-
-    /** Comma-separated E.164 phone numbers. */
-    private String to = "";
 
     private String baseUrl = "https://api.twilio.com/2010-04-01";
 
@@ -55,14 +49,6 @@ public class SmsProperties {
         this.from = from;
     }
 
-    public String getTo() {
-        return to;
-    }
-
-    public void setTo(String to) {
-        this.to = to;
-    }
-
     public String getBaseUrl() {
         return baseUrl;
     }
@@ -79,27 +65,12 @@ public class SmsProperties {
         this.timeoutMs = timeoutMs;
     }
 
-    public List<String> getToNumbers() {
-        if (to == null || to.isBlank()) {
-            return List.of();
-        }
-        List<String> numbers = new ArrayList<>();
-        for (String part : to.split(",")) {
-            String trimmed = part.trim();
-            if (!trimmed.isEmpty()) {
-                numbers.add(trimmed);
-            }
-        }
-        return Collections.unmodifiableList(numbers);
-    }
-
-    public boolean isConfigured() {
+    public boolean hasTwilioCredentials() {
         return accountSid != null
                 && !accountSid.isBlank()
                 && authToken != null
                 && !authToken.isBlank()
                 && from != null
-                && !from.isBlank()
-                && !getToNumbers().isEmpty();
+                && !from.isBlank();
     }
 }

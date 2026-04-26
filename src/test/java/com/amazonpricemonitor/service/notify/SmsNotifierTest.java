@@ -3,6 +3,8 @@ package com.amazonpricemonitor.service.notify;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -13,23 +15,32 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.amazonpricemonitor.config.SmsProperties;
 import com.amazonpricemonitor.domain.FetchMethod;
 import com.amazonpricemonitor.domain.MonitoredProduct;
+import com.amazonpricemonitor.service.NotificationRecipientsService;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.web.client.ExpectedCount;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+@ExtendWith(MockitoExtension.class)
 class SmsNotifierTest {
 
     private RestClient.Builder builder;
     private MockRestServiceServer mockServer;
     private RestClient restClient;
     private SmsProperties smsProperties;
+
+    @Mock
+    private NotificationRecipientsService recipientsService;
 
     @BeforeEach
     void setUp() {
@@ -41,9 +52,9 @@ class SmsNotifierTest {
         smsProperties.setAccountSid("ACtestsid");
         smsProperties.setAuthToken("testtoken");
         smsProperties.setFrom("+15550001111");
-        smsProperties.setTo("+15550002222");
         smsProperties.setBaseUrl("https://twilio.test");
         smsProperties.setTimeoutMs(3000);
+        lenient().when(recipientsService.getSmsRecipients()).thenReturn(List.of("+15550002222"));
     }
 
     @Test
@@ -64,7 +75,7 @@ class SmsNotifierTest {
                         containsString("Body="))))
                 .andRespond(withSuccess());
 
-        SmsNotifier notifier = new SmsNotifier(smsProperties, restClient);
+        SmsNotifier notifier = new SmsNotifier(smsProperties, recipientsService, restClient);
         MonitoredProduct product = product("https://amazon.example/dp/B00", "Gadget");
 
         notifier.notifyPriceDrop(
@@ -83,7 +94,26 @@ class SmsNotifierTest {
     @Test
     void skipsHttpWhenTwilioNotConfigured() {
         smsProperties.setAccountSid("");
-        SmsNotifier notifier = new SmsNotifier(smsProperties, restClient);
+        SmsNotifier notifier = new SmsNotifier(smsProperties, recipientsService, restClient);
+        MonitoredProduct product = product("https://a.example/x", "X");
+
+        notifier.notifyPriceDrop(
+                product,
+                BigDecimal.TEN,
+                BigDecimal.ONE,
+                BigDecimal.TEN,
+                BigDecimal.TEN,
+                "t",
+                FetchMethod.JSOUP,
+                null);
+
+        mockServer.verify();
+    }
+
+    @Test
+    void skipsHttpWhenRecipientsEmpty() {
+        when(recipientsService.getSmsRecipients()).thenReturn(List.of());
+        SmsNotifier notifier = new SmsNotifier(smsProperties, recipientsService, restClient);
         MonitoredProduct product = product("https://a.example/x", "X");
 
         notifier.notifyPriceDrop(
@@ -106,7 +136,7 @@ class SmsNotifierTest {
                 .andExpect(method(HttpMethod.POST))
                 .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
 
-        SmsNotifier notifier = new SmsNotifier(smsProperties, restClient);
+        SmsNotifier notifier = new SmsNotifier(smsProperties, recipientsService, restClient);
         MonitoredProduct product = product("https://a.example/p", "P");
 
         notifier.notifyPriceDrop(

@@ -69,6 +69,18 @@
                 </div>
             </div>
             <p id="scheduler-settings-message" class="form-message form-message--toolbar" role="status"></p>
+            <div class="recipients" aria-label="Notification recipients">
+                <label class="recipients__field">
+                    <span class="recipients__label">Email recipients</span>
+                    <input type="text" id="email-recipients" class="recipients__input" autocomplete="off" placeholder="alice@example.com, bob@example.com"/>
+                </label>
+                <label class="recipients__field">
+                    <span class="recipients__label">SMS recipients (E.164)</span>
+                    <input type="text" id="sms-recipients" class="recipients__input" autocomplete="off" placeholder="+15551234567, +15557654321"/>
+                </label>
+                <button type="button" id="save-recipients" class="btn btn--secondary">Save recipients</button>
+            </div>
+            <p id="recipients-message" class="form-message form-message--toolbar" role="status"></p>
             <p id="chart-hint" class="chart-placeholder">Click a listing to view the chart.</p>
             <div class="chart-wrap">
                 <canvas id="price-chart" height="120" aria-label="Price over time"></canvas>

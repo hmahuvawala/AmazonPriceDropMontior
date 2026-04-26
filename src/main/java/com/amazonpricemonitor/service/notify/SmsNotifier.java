@@ -3,6 +3,7 @@ package com.amazonpricemonitor.service.notify;
 import com.amazonpricemonitor.config.SmsProperties;
 import com.amazonpricemonitor.domain.FetchMethod;
 import com.amazonpricemonitor.domain.MonitoredProduct;
+import com.amazonpricemonitor.service.NotificationRecipientsService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
@@ -26,10 +27,15 @@ public class SmsNotifier implements ChannelNotifier {
     static final int MAX_SMS_BODY_LENGTH = 320;
 
     private final SmsProperties smsProperties;
+    private final NotificationRecipientsService recipientsService;
     private final RestClient twilioRestClient;
 
-    public SmsNotifier(SmsProperties smsProperties, RestClient twilioRestClient) {
+    public SmsNotifier(
+            SmsProperties smsProperties,
+            NotificationRecipientsService recipientsService,
+            RestClient twilioRestClient) {
         this.smsProperties = smsProperties;
+        this.recipientsService = recipientsService;
         this.twilioRestClient = twilioRestClient;
     }
 
@@ -43,7 +49,8 @@ public class SmsNotifier implements ChannelNotifier {
             String thresholdTriggers,
             FetchMethod method,
             String aiSummary) {
-        if (!smsProperties.isConfigured()) {
+        List<String> toNumbers = recipientsService.getSmsRecipients();
+        if (!smsProperties.hasTwilioCredentials() || toNumbers.isEmpty()) {
             MDC.put("event", "notification.failed");
             MDC.put("channel", "sms");
             MDC.put("reason", "not_configured");
@@ -74,7 +81,7 @@ public class SmsNotifier implements ChannelNotifier {
         String uri = buildMessagesUri();
         String authHeader = basicAuthHeader(smsProperties.getAccountSid(), smsProperties.getAuthToken());
 
-        for (String toNumber : smsProperties.getToNumbers()) {
+        for (String toNumber : toNumbers) {
             MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
             form.add("From", smsProperties.getFrom());
             form.add("To", toNumber);

@@ -14,6 +14,8 @@ No authentication. JSON in/out. Errors via [GlobalExceptionHandler](../src/main/
 | POST | `/api/admin/send-test-notification` | [AdminController.sendTestNotification](../src/main/java/com/amazonpricemonitor/web/AdminController.java) | Synthetic `Notifier.notifyPriceDrop` (no DB writes). **404** unless `app.admin.allow-test-notification=true` (`ADMIN_ALLOW_TEST_NOTIFICATION`). |
 | GET | `/api/admin/scheduler-settings` | [AdminController.getSchedulerSettings](../src/main/java/com/amazonpricemonitor/web/AdminController.java) | `SchedulerSettingsService.getCheckIntervalMs` |
 | PUT | `/api/admin/scheduler-settings` | [AdminController.putSchedulerSettings](../src/main/java/com/amazonpricemonitor/web/AdminController.java) | `SchedulerSettingsService.updateCheckIntervalMs` |
+| GET | `/api/admin/notification-recipients` | [AdminController.getNotificationRecipients](../src/main/java/com/amazonpricemonitor/web/AdminController.java) | `NotificationRecipientsService.getEmailToCsv` / `getSmsToCsv` |
+| PUT | `/api/admin/notification-recipients` | [AdminController.putNotificationRecipients](../src/main/java/com/amazonpricemonitor/web/AdminController.java) | `NotificationRecipientsService.updateEmailRecipients` / `updateSmsRecipients` |
 
 ### Status codes
 - `POST /api/products` → 201 (`@ResponseStatus(CREATED)`).
@@ -22,8 +24,10 @@ No authentication. JSON in/out. Errors via [GlobalExceptionHandler](../src/main/
 - `POST /api/admin/send-test-notification` → **404** when `ADMIN_ALLOW_TEST_NOTIFICATION` is not `true`. When enabled → **202** JSON `{ "status": "dispatched", "hint": "..." }` — fires one synthetic alert through the real notifier (log / email / SMS); does **not** change `price_check` rows. Use only on trusted networks (no auth).
 - `GET /api/admin/scheduler-settings` → 200 JSON `{ "checkIntervalMs": 3600000 }` (delay after each **completed** scheduled run until the next; not the 60s boot delay).
 - `PUT /api/admin/scheduler-settings` → 200 with the same shape. Body: `{ "checkIntervalMs": <long> }` validated to **60_000 ≤ x ≤ 604_800_000** (1 minute … 7 days). The background scheduler reads this from the DB when scheduling the **next** cycle (the run already sleeping is unchanged until it fires).
+- `GET /api/admin/notification-recipients` → 200 JSON `{ "emailToCsv": "...", "smsToCsv": "..." }` — current recipient lists from the singleton `notification_recipients` row. Empty strings when nothing is configured.
+- `PUT /api/admin/notification-recipients` → 200 with the same shape after persistence. Each entry in `emailToCsv` is validated against `^[^\s@]+@[^\s@]+\.[^\s@]+$`; each entry in `smsToCsv` must be **E.164** (`^\+[1-9]\d{6,14}$`). CSV length is capped at **4000** chars (email) / **500** chars (SMS). Entries are trimmed; blank entries are dropped on save. Invalid input → **400** `{"message": "..."}` via `IllegalArgumentException` mapped by [GlobalExceptionHandler](../src/main/java/com/amazonpricemonitor/web/GlobalExceptionHandler.java).
 - `EntityNotFoundException` → 404 `{"message": "..."}`.
-- `MethodArgumentNotValidException` / `ConstraintViolationException` → 400 `{"message": "..."}`.
+- `MethodArgumentNotValidException` / `ConstraintViolationException` / `IllegalArgumentException` → 400 `{"message": "..."}`.
 
 ## DTOs
 
@@ -56,6 +60,21 @@ Either threshold field may be `null` when only the other was configured. `lastPr
 ```
 
 Used by `GET` / `PUT` `/api/admin/scheduler-settings`. Milliseconds between the end of one scheduled run and the start of the next (fixed-delay). Independent of the **60s** first-run delay after boot and the SPA’s **3s** post-add manual trigger.
+
+### Notification recipients (JSON)
+
+Used by `GET` / `PUT` `/api/admin/notification-recipients`. Both shapes — [`NotificationRecipientsResponse`](../src/main/java/com/amazonpricemonitor/web/dto/NotificationRecipientsResponse.java) and [`UpdateNotificationRecipientsRequest`](../src/main/java/com/amazonpricemonitor/web/dto/UpdateNotificationRecipientsRequest.java) — are identical:
+
+```json
+{
+  "emailToCsv": "alerts@example.com,ops@example.com",
+  "smsToCsv":   "+15551231234,+14155550199"
+}
+```
+
+- Persisted in the singleton `notification_recipients` row (`id=1`, seeded empty by [Flyway V4](../src/main/resources/db/migration/V4__notification_recipients.sql)).
+- On `PUT`: each entry is trimmed; blank entries are dropped; emails matched by `^[^\s@]+@[^\s@]+\.[^\s@]+$`; phones must be **E.164** (`^\+[1-9]\d{6,14}$`); CSV length capped at **4000** (email) / **500** (SMS) chars.
+- An empty `emailToCsv` / `smsToCsv` is valid — the corresponding [`EmailNotifier`](../src/main/java/com/amazonpricemonitor/service/notify/EmailNotifier.java) / [`SmsNotifier`](../src/main/java/com/amazonpricemonitor/service/notify/SmsNotifier.java) short-circuits with `notification.failed` (`reason=not_configured`) when its list is empty, even if the channel is otherwise enabled.
 
 ### [PriceHistoryPointResponse](../src/main/java/com/amazonpricemonitor/web/dto/PriceHistoryPointResponse.java) (record)
 ```json
