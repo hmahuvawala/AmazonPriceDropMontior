@@ -23,3 +23,7 @@ The third issue was real-world setup friction. The AI initially recommended Slac
 I decided to pivot to SMTP email and Twilio SMS instead. That introduced its own setup and validation issues, including Twilio free-tier limitations, but it was more practical for the timebox. I logged the Twilio output safely, documented the known issue, and stopped development instead of burning more time chasing external API credentials.
 
 Overall, the AI was useful for generating structure quickly, but it tended to optimize for the easiest code path rather than the full product requirements or real deployment friction. I had to validate the generated code with manual tests, debugger traces, database changes, and architectural refactoring before the system matched the intended behavior.
+
+## SMS Messaging via Twilio
+
+Twilio was an easy way to setup SMS Messaging for the time frame of 2 to 4 hours allocated. The API works, but there was an internal problem with Twilio that did not allow messages to get sent. I identified this issue, but due to time constraints had to move on. For the Twilio API to work, I would need to verify my account, for which I would need to enter business details which I do not have for this project. 
