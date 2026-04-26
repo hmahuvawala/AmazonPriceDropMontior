@@ -25,23 +25,15 @@ services:
         condition: service_healthy
     ports:
       - "${SERVER_PORT:-8080}:8080"
+    # Load secrets and app.* / MAIL_* / TWILIO_* / GEMINI_* from this file (same directory as
+    # compose). Do not duplicate them under `environment` with ${VAR:-} — when VAR is unset on the
+    # *host* at compose parse time, Compose injects empty and would override these values here.
+    env_file:
+      - .env.local
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-amazon_price_monitor}
-      DB_USER: ${DB_USER:-monitor}
-      DB_PASSWORD: ${DB_PASSWORD:-monitor}
-      ALTERLAB_API_KEY: ${ALTERLAB_API_KEY:-}
-      ALTERLAB_BASE_URL: ${ALTERLAB_BASE_URL:-https://api.alterlab.io/api/v1}
-      NOTIFICATION_TYPE: ${NOTIFICATION_TYPE:-log}
-      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
       SERVER_PORT: 8080
-      SCHEDULER_ENABLED: ${SCHEDULER_ENABLED:-true}
-      SCHEDULER_INTERVAL_MS: ${SCHEDULER_INTERVAL_MS:-3600000}
-      GEMINI_ENABLED: ${GEMINI_ENABLED:-true}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
-      GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-5000}
     restart: unless-stopped
 
 volumes:

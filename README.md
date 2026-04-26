@@ -1,6 +1,6 @@
 # Amazon Price Monitor
 
-Spring Boot 3 / Java 21 worker plus a small SPA: scheduled price checks for Amazon URLs, **Jsoup** first, **AlterLab** fallback, **PostgreSQL** + **Flyway**, configurable **log / Slack / noop** notifications on threshold breaches, **Chart.js** history UI.
+Spring Boot 3 / Java 21 worker plus a small SPA: scheduled price checks for Amazon URLs, **Jsoup** first, **AlterLab** fallback, **PostgreSQL** + **Flyway**, configurable **log / email / SMS** notifications on threshold breaches, **Chart.js** history UI.
 
 The Git repository folder is named `AmazonPriceDropMontior` (as created on disk).
 
@@ -16,12 +16,12 @@ The Git repository folder is named `AmazonPriceDropMontior` (as created on disk)
 
 ### Option A — Docker Compose (one command, app + Postgres)
 
-1. Copy `.env.example` to `.env` and fill in any secrets (e.g. `ALTERLAB_API_KEY`, `SLACK_WEBHOOK_URL`). Inside Compose, `DB_HOST` is overridden to `postgres` automatically — your local `.env` value is ignored for the app container.
+1. Copy `.env.example` to **`.env.local`** in the **`AmazonPriceDropMontior/`** directory (same folder as `docker-compose.yml`) and fill in secrets. Compose loads that file into the **`app`** container via `env_file`; `DB_HOST` is still forced to **`postgres`** there so the app reaches the Compose Postgres service. Without `.env.local`, `docker compose up` will fail.
 
-2. Build and start the stack:
+2. Build and start the stack (pass the same file so `${DB_USER}` / `${SERVER_PORT}` in `docker-compose.yml` interpolate for **postgres** and port mapping, not only for the `app` container):
 
    ```bash
-   docker compose up --build
+   docker compose --env-file .env.local up --build
    ```
 
 3. Open **http://localhost:8080/** for the UI, or use the JSON API under `/api/products`.
@@ -50,7 +50,7 @@ The Git repository folder is named `AmazonPriceDropMontior` (as created on disk)
 
    ```bash
    export ALTERLAB_API_KEY="your-key"
-   export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/..."
+   # Optional: export MAIL_* and NOTIFY_EMAIL_* for SMTP alerts, or Twilio vars for SMS.
    ```
 
 3. Run the app:
@@ -68,8 +68,10 @@ The Git repository folder is named `AmazonPriceDropMontior` (as created on disk)
 Environment variables map to `src/main/resources/application.yml`. See `.env.example` for a checklist.
 
 - **`ALTERLAB_API_KEY`**: required for AlterLab fallback ([docs](https://alterlab.io/docs/api/rest)).
-- **`NOTIFICATION_TYPE`**: `log` (default), `slack`, or `noop`. `log` prints a structured WARN on price alerts; `slack` posts to **`SLACK_WEBHOOK_URL`** via `app.notification.slack.webhook-url`; `noop` disables notifier output.
-- **`SLACK_WEBHOOK_URL`**: used when `NOTIFICATION_TYPE=slack`; if unset, Slack delivery is skipped (checks still run).
+- **`NOTIFY_LOG_ENABLED`**: default `true` — structured **INFO** `notification.sent` lines on threshold breaches.
+- **`NOTIFY_EMAIL_ENABLED`** + **`MAIL_*`** + **`NOTIFY_EMAIL_FROM` / `NOTIFY_EMAIL_TO`**: SMTP via Spring Mail when enabled and configured.
+- **`NOTIFY_SMS_ENABLED`** + **`TWILIO_*`** + **`NOTIFY_SMS_TO`**: Twilio SMS when enabled and configured. SMS bodies are capped at ~320 characters (AI summary truncated if needed).
+- Turn **all** channels off with `NOTIFY_LOG_ENABLED=false` and email/SMS disabled — no notifier output (checks still run).
 - **`SCHEDULER_INTERVAL_MS`**: default delay in milliseconds when the `scheduler_settings` row is first created without Flyway (default 1 hour). The **live** interval is stored in the database and can be changed in the UI (**Checks every … min** → **Save interval**). First scheduled run still starts **60s** after boot; the **3s** post-add check in the SPA is unchanged.
 - **`SCHEDULER_ENABLED=false`**: turns off the background scheduler (useful with tests or manual-only runs).
 - **`GEMINI_API_KEY`** / **`GEMINI_ENABLED`**: enrich threshold-breach notifications with a 1–2 sentence Google Gemini summary of the trailing 7 days. With no key (or `GEMINI_ENABLED=false`), a deterministic fallback summary computed from the DB is shipped instead — the alert path is never blocked on AI. See [docs/monitoring-and-alerts.md](docs/monitoring-and-alerts.md#ai-assisted-change-summary) for the accuracy strategy and event catalog.
@@ -83,12 +85,19 @@ Environment variables map to `src/main/resources/application.yml`. See `.env.exa
 | DELETE | `/api/products/{id}` | Remove product and history |
 | GET | `/api/products/{id}/price-history` | Audit trail for charting |
 | POST | `/api/admin/run-checks` | Run checks immediately (no auth in this prototype) |
+| POST | `/api/admin/send-test-notification` | **Optional:** when `ADMIN_ALLOW_TEST_NOTIFICATION=true`, sends one **synthetic** price-drop notification through the real notifier (email/SMS/log) without changing the database — use to verify SMTP/Twilio. Returns **404** when disabled. |
 | GET | `/api/admin/scheduler-settings` | Current scheduled check interval (`checkIntervalMs`) |
 | PUT | `/api/admin/scheduler-settings` | Set interval (`{"checkIntervalMs": 3600000}` — min 60s, max 7 days) |
 
+### Verify email / SMS without a real price drop
+
+1. Set **`ADMIN_ALLOW_TEST_NOTIFICATION=true`** in `.env.local` (or export it), restart the app, and ensure email/SMS env vars are set as usual.
+2. Call **`POST http://localhost:8080/api/admin/send-test-notification`** (e.g. `curl -X POST http://localhost:8080/api/admin/send-test-notification`).
+3. **Success signals:** JSON `{"status":"dispatched",...}` and **202**; logs show **`notification.sent`** (`channel=email` / `sms` / `log`) or **`notification.failed`** with a reason; check the recipient inbox/phone.
+
 ## Architecture notes
 
-- **Drop detection** compares the new successful price to the **previous successful** check for the same product, then fires Slack if **either** configured threshold is met: percent drop **≥** `thresholdPct` (when set) **or** dollar drop **≥** `thresholdAmount` (when set).
+- **Drop detection** compares the new successful price to the **previous successful** check for the same product, then fires configured notifier channels if **either** threshold is met: percent drop **≥** `thresholdPct` (when set) **or** dollar drop **≥** `thresholdAmount` (when set).
 - Failed checks are stored with `fetchMethod` **`FAILED`** when neither Jsoup nor AlterLab returns a price.
 
 ## License

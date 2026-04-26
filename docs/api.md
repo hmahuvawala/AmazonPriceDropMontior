@@ -11,6 +11,7 @@ No authentication. JSON in/out. Errors via [GlobalExceptionHandler](../src/main/
 | DELETE | `/api/products/{id}` | [ProductController.deleteProduct](../src/main/java/com/amazonpricemonitor/web/ProductController.java#L42) | `ProductCatalogService.deleteProduct` |
 | GET | `/api/products/{id}/price-history` | [ProductController.priceHistory](../src/main/java/com/amazonpricemonitor/web/ProductController.java#L47) | `ProductCatalogService.priceHistory` |
 | POST | `/api/admin/run-checks` | [AdminController.runChecksNow](../src/main/java/com/amazonpricemonitor/web/AdminController.java) | `PriceMonitoringService.runChecksForActiveProducts` |
+| POST | `/api/admin/send-test-notification` | [AdminController.sendTestNotification](../src/main/java/com/amazonpricemonitor/web/AdminController.java) | Synthetic `Notifier.notifyPriceDrop` (no DB writes). **404** unless `app.admin.allow-test-notification=true` (`ADMIN_ALLOW_TEST_NOTIFICATION`). |
 | GET | `/api/admin/scheduler-settings` | [AdminController.getSchedulerSettings](../src/main/java/com/amazonpricemonitor/web/AdminController.java) | `SchedulerSettingsService.getCheckIntervalMs` |
 | PUT | `/api/admin/scheduler-settings` | [AdminController.putSchedulerSettings](../src/main/java/com/amazonpricemonitor/web/AdminController.java) | `SchedulerSettingsService.updateCheckIntervalMs` |
 
@@ -18,6 +19,7 @@ No authentication. JSON in/out. Errors via [GlobalExceptionHandler](../src/main/
 - `POST /api/products` → 201 (`@ResponseStatus(CREATED)`).
 - `DELETE /api/products/{id}` → 204 (`@ResponseStatus(NO_CONTENT)`).
 - `POST /api/admin/run-checks` → 202 (`@ResponseStatus(ACCEPTED)`) but the call is **synchronous** — the request thread blocks while every active product is scraped and persisted. Long-running for many products.
+- `POST /api/admin/send-test-notification` → **404** when `ADMIN_ALLOW_TEST_NOTIFICATION` is not `true`. When enabled → **202** JSON `{ "status": "dispatched", "hint": "..." }` — fires one synthetic alert through the real notifier (log / email / SMS); does **not** change `price_check` rows. Use only on trusted networks (no auth).
 - `GET /api/admin/scheduler-settings` → 200 JSON `{ "checkIntervalMs": 3600000 }` (delay after each **completed** scheduled run until the next; not the 60s boot delay).
 - `PUT /api/admin/scheduler-settings` → 200 with the same shape. Body: `{ "checkIntervalMs": <long> }` validated to **60_000 ≤ x ≤ 604_800_000** (1 minute … 7 days). The background scheduler reads this from the DB when scheduling the **next** cycle (the run already sleeping is unchanged until it fires).
 - `EntityNotFoundException` → 404 `{"message": "..."}`.
@@ -35,7 +37,7 @@ No authentication. JSON in/out. Errors via [GlobalExceptionHandler](../src/main/
   "active":            true                            // defaults to true
 }
 ```
-**At least one** of `thresholdPct` or `thresholdAmount` must be present (`@AssertTrue isAtLeastOneThresholdSet`). If both are set, Slack alerts when **either** condition is met (OR semantics) vs the previous successful price.
+**At least one** of `thresholdPct` or `thresholdAmount` must be present (`@AssertTrue isAtLeastOneThresholdSet`). If both are set, notifier alerts when **either** condition is met (OR semantics) vs the previous successful price.
 
 Validated via `@Valid` on the controller. `displayName` and `amazonUrl` are `.trim()`-ed before persistence.
 

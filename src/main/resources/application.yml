@@ -15,6 +15,21 @@ spring:
           time_zone: UTC
   flyway:
     enabled: true
+  # Optional: set MAIL_HOST (bound below) when NOTIFY_EMAIL_ENABLED=true. If MAIL_HOST is unset,
+  # leave this block absent of a host key — use application-local.yml or env-only overrides.
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS_ENABLE:false}
+          connectiontimeout: ${MAIL_CONNECTION_TIMEOUT_MS:10000}
+          timeout: ${MAIL_TIMEOUT_MS:10000}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -35,16 +50,30 @@ alterlab:
   request-timeout-seconds: ${ALTERLAB_TIMEOUT_SECONDS:90}
 
 app:
+  admin:
+    # When true, POST /api/admin/send-test-notification sends a synthetic alert (no DB changes).
+    allow-test-notification: ${ADMIN_ALLOW_TEST_NOTIFICATION:false}
   notification:
-    type: ${NOTIFICATION_TYPE:log}
-    slack:
-      webhook-url: ${SLACK_WEBHOOK_URL:}
+    log:
+      enabled: ${NOTIFY_LOG_ENABLED:true}
+    email:
+      enabled: ${NOTIFY_EMAIL_ENABLED:false}
+      from: ${NOTIFY_EMAIL_FROM:}
+      to: ${NOTIFY_EMAIL_TO:}
+      subject-prefix: ${NOTIFY_EMAIL_SUBJECT_PREFIX:}
+    sms:
+      enabled: ${NOTIFY_SMS_ENABLED:false}
+      account-sid: ${TWILIO_ACCOUNT_SID:}
+      auth-token: ${TWILIO_AUTH_TOKEN:}
+      from: ${TWILIO_FROM:}
+      to: ${NOTIFY_SMS_TO:}
+      base-url: ${TWILIO_BASE_URL:https://api.twilio.com/2010-04-01}
+      timeout-ms: ${NOTIFY_SMS_TIMEOUT_MS:5000}
   scheduler:
     enabled: ${SCHEDULER_ENABLED:true}
     # Used when creating scheduler_settings row if Flyway did not (e.g. H2 tests). UI + PUT /api/admin/scheduler-settings persist the live interval in the DB.
     interval-ms: ${SCHEDULER_INTERVAL_MS:3600000}
   jsoup:
-    connect-timeout-ms: 10000
     read-timeout-ms: 15000
     user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
   ai:

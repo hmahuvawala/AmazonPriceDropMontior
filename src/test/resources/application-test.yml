@@ -1,4 +1,7 @@
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.mail.MailSenderAutoConfiguration
   datasource:
     url: jdbc:h2:mem:amazon_price_monitor;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
     driver-class-name: org.h2.Driver
@@ -23,10 +26,15 @@ alterlab:
   api-key: test-key
 
 app:
+  admin:
+    allow-test-notification: false
   notification:
-    type: noop
-    slack:
-      webhook-url:
+    log:
+      enabled: false
+    email:
+      enabled: false
+    sms:
+      enabled: false
   scheduler:
     enabled: false
   ai:

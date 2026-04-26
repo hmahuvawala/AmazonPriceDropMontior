@@ -6,4 +6,5 @@
 *.iml
 .DS_Store
 .env
+.env.local
 *.log

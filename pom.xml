@@ -15,7 +15,7 @@
     <artifactId>amazon-price-monitor</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>amazon-price-monitor</name>
-    <description>Scheduled Amazon price checks with Jsoup + AlterLab fallback and Slack alerts</description>
+    <description>Scheduled Amazon price checks with Jsoup + AlterLab fallback and email/SMS alerts</description>
 
     <properties>
         <java.version>21</java.version>
@@ -37,6 +37,10 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
         <dependency>
             <groupId>net.logstash.logback</groupId>

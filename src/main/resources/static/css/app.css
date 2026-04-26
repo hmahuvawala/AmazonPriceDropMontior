@@ -392,18 +392,6 @@ body {
     border-color: var(--muted);
 }
 
-.btn--ghost {
-    padding: 0.4rem 0.65rem;
-    background: transparent;
-    color: var(--text);
-    border-color: var(--border);
-    font-weight: 500;
-}
-
-.btn--ghost:hover {
-    background: var(--bg);
-}
-
 .btn--danger {
     padding: 0.4rem 0.65rem;
     background: var(--danger-bg);

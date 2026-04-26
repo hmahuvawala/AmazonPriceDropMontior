@@ -1,7 +1,6 @@
 package com.amazonpricemonitor.service.ai;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 
 /**
  * Deterministic, pre-computed view of a product's last-N-days price activity.
@@ -21,8 +20,6 @@ import java.time.Instant;
  * @param numFailures    Failed checks in the window.
  * @param currency       Currency code of the most recent successful check (e.g. "USD").
  * @param windowDays     Number of days in the trailing window (e.g. 7).
- * @param oldestCheckAt  Timestamp of {@code oldestPrice}.
- * @param latestCheckAt  Timestamp of {@code latestPrice}.
  */
 public record PriceTrendStats(
         BigDecimal oldestPrice,
@@ -36,9 +33,7 @@ public record PriceTrendStats(
         int numSuccess,
         int numFailures,
         String currency,
-        int windowDays,
-        Instant oldestCheckAt,
-        Instant latestCheckAt) {
+        int windowDays) {
 
     public boolean hasEnoughDataToNarrate() {
         return numSuccess >= 2;

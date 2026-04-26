@@ -1,6 +1,6 @@
 # Overview
 
-Spring Boot 3.4 / Java 21 worker + small SPA. Periodically scrapes Amazon product pages for price, persists every check, and posts to Slack when a successful price drop meets **either** a per-product **percentage** threshold, **absolute dollar** threshold, or both (OR semantics vs the prior successful price).
+Spring Boot 3.4 / Java 21 worker + small SPA. Periodically scrapes Amazon product pages for price, persists every check, and notifies via **log / email / SMS** when a successful price drop meets **either** a per-product **percentage** threshold, **absolute dollar** threshold, or both (OR semantics vs the prior successful price).
 
 ## Stack
 
@@ -8,7 +8,7 @@ Spring Boot 3.4 / Java 21 worker + small SPA. Periodically scrapes Amazon produc
 - **PostgreSQL 16** in prod (Docker Compose); **H2** in PostgreSQL-mode for tests.
 - **Flyway** for migrations (`src/main/resources/db/migration`). Hibernate is `ddl-auto: validate` in prod, `create-drop` + flyway disabled in tests.
 - **Jsoup 1.18.3** for primary HTML scraping.
-- **Spring `RestClient`** (built on JDK `HttpClient`) for AlterLab REST fallback and Slack webhook.
+- **Spring `RestClient`** (built on JDK `HttpClient`) for AlterLab REST fallback, Twilio SMS, and Gemini.
 - **Vanilla JS + Chart.js 4.4 (CDN)** SPA served from `src/main/resources/static`.
 
 ## Top-level layout

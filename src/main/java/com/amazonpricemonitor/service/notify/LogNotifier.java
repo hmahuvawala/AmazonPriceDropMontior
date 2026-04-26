@@ -10,8 +10,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnProperty(name = "app.notification.type", havingValue = "log", matchIfMissing = true)
-public class LogNotifier implements Notifier {
+@ConditionalOnProperty(name = "app.notification.log.enabled", havingValue = "true", matchIfMissing = true)
+public class LogNotifier implements ChannelNotifier {
 
     private static final Logger log = LoggerFactory.getLogger(LogNotifier.class);
 

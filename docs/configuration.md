@@ -2,7 +2,7 @@
 
 All runtime config lives in [application.yml](../src/main/resources/application.yml) and is bound to typed `@ConfigurationProperties` classes registered in [AppConfiguration](../src/main/java/com/amazonpricemonitor/config/AppConfiguration.java).
 
-`AppConfiguration` also exposes the singleton `RestClient.Builder` bean used by [SlackNotifier](../src/main/java/com/amazonpricemonitor/service/notify/SlackNotifier.java) (AlterLab builds its own `RestClient` with custom timeouts).
+`AppConfiguration` exposes the singleton `RestClient.Builder` bean plus dedicated `RestClient` beans for Gemini and Twilio SMS (`SimpleClientHttpRequestFactory` timeouts). AlterLab builds its own `RestClient` with custom read timeouts.
 
 ## Property → env-var mapping
 
@@ -16,8 +16,14 @@ All runtime config lives in [application.yml](../src/main/resources/application.
 | `alterlab.api-key` | `ALTERLAB_API_KEY` | *(empty)* | AlterLab fallback (skipped if empty) |
 | `alterlab.scrape-path` | — | `/scrape` | AlterLab |
 | `alterlab.request-timeout-seconds` | `ALTERLAB_TIMEOUT_SECONDS` | `90` (floored at 30 in client) | AlterLab read timeout |
-| `app.notification.type` | `NOTIFICATION_TYPE` | `log` | Selects [LogNotifier](../src/main/java/com/amazonpricemonitor/service/notify/LogNotifier.java), [SlackNotifier](../src/main/java/com/amazonpricemonitor/service/notify/SlackNotifier.java), or [NoopNotifier](../src/main/java/com/amazonpricemonitor/service/notify/NoopNotifier.java) (`log` \| `slack` \| `noop`) |
-| `app.notification.slack.webhook-url` | `SLACK_WEBHOOK_URL` | *(empty)* | Slack POST when `type=slack`; if empty, [SlackNotifier](../src/main/java/com/amazonpricemonitor/service/notify/SlackNotifier.java) skips the HTTP call |
+| `app.admin.allow-test-notification` | `ADMIN_ALLOW_TEST_NOTIFICATION` | `false` | When `true`, enables `POST /api/admin/send-test-notification` (synthetic notifier probe; **no auth** — keep `false` in production) |
+| `app.notification.log.enabled` | `NOTIFY_LOG_ENABLED` | `true` | [LogNotifier](../src/main/java/com/amazonpricemonitor/service/notify/LogNotifier.java) — structured INFO lines on alerts |
+| `app.notification.email.enabled` | `NOTIFY_EMAIL_ENABLED` | `false` | [EmailNotifier](../src/main/java/com/amazonpricemonitor/service/notify/EmailNotifier.java); also needs `spring.mail.*` / `MAIL_*` so `JavaMailSender` auto-configures |
+| `app.notification.email.from` / `to` | `NOTIFY_EMAIL_FROM`, `NOTIFY_EMAIL_TO` | *(empty)* | Comma-separated `to` addresses |
+| `app.notification.email.subject-prefix` | `NOTIFY_EMAIL_SUBJECT_PREFIX` | *(blank → default `[Amazon Price Monitor]` in code)* | Email subject prefix |
+| `app.notification.sms.enabled` | `NOTIFY_SMS_ENABLED` | `false` | [SmsNotifier](../src/main/java/com/amazonpricemonitor/service/notify/SmsNotifier.java) (Twilio) |
+| `app.notification.sms.*` | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM`, `NOTIFY_SMS_TO`, `TWILIO_BASE_URL`, `NOTIFY_SMS_TIMEOUT_MS` | — | Twilio REST + comma-separated SMS recipients |
+| `spring.mail.*` | `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_SMTP_AUTH`, `MAIL_SMTP_STARTTLS_ENABLE`, `MAIL_CONNECTION_TIMEOUT_MS`, `MAIL_TIMEOUT_MS` | see [application.yml](../src/main/resources/application.yml) | Required when email alerts are enabled (`NOTIFY_EMAIL_ENABLED=true` and non-blank host) |
 | `app.scheduler.enabled` | `SCHEDULER_ENABLED` | `true` | gates [PriceCheckScheduler](../src/main/java/com/amazonpricemonitor/scheduler/PriceCheckScheduler.java) bean via `@ConditionalOnProperty` |
 | `app.scheduler.interval-ms` | `SCHEDULER_INTERVAL_MS` | `3600000` (1h) | default when [SchedulerSettingsService](../src/main/java/com/amazonpricemonitor/service/SchedulerSettingsService.java) creates the singleton `scheduler_settings` row (e.g. H2 tests without Flyway). **Production** interval is stored in the DB (Flyway V3 seed + UI / `PUT /api/admin/scheduler-settings`). |
 | `app.jsoup.connect-timeout-ms` | — | `10000` | [JsoupClientProperties](../src/main/java/com/amazonpricemonitor/config/JsoupClientProperties.java) |
@@ -33,15 +39,14 @@ All runtime config lives in [application.yml](../src/main/resources/application.
 | `management.endpoint.health.show-details` | — | `never` | Keeps health JSON compact; avoids leaking details without auth. |
 | `logging.level.com.amazonpricemonitor` | — | `INFO` | Applied via [logback-spring.xml](../src/main/resources/logback-spring.xml) `springProperty` so package levels still work with a custom Logback file. |
 
-The legacy top-level `slack.webhook-url` key was removed; use `app.notification.slack.webhook-url` (still populated from `SLACK_WEBHOOK_URL` in YAML).
-
 `.env.example` mirrors the above and is what the README points users at.
 
 ## Behavior gates
 
 - **Scheduler off**: set `SCHEDULER_ENABLED=false` (or `app.scheduler.enabled: false`). The bean is conditionally created. Manual `POST /api/admin/run-checks` still works.
-- **Notifications**: `NOTIFICATION_TYPE=log` (default) logs **INFO** `notification.sent` (MDC) when a threshold fires — no secrets, no outbound HTTP. Use `slack` + `SLACK_WEBHOOK_URL` for Slack. Use `noop` to disable alerts entirely (no notifier log lines).
-- **Slack with empty webhook**: with `NOTIFICATION_TYPE=slack`, an empty `SLACK_WEBHOOK_URL` skips the POST and emits **WARN** `notification.failed` with `reason=webhook_not_configured`; checks still run and persist.
+- **Notifications**: enable any mix of **log** (default on), **email** (`NOTIFY_EMAIL_ENABLED=true` + `MAIL_*` + from/to), and **SMS** (`NOTIFY_SMS_ENABLED=true` + Twilio env vars). Set `NOTIFY_LOG_ENABLED=false` (and disable email/SMS) to silence all notifier output — `CompositeNotifier` then has no delegates.
+- **Email with missing config**: `NOTIFY_EMAIL_ENABLED=true` but blank `from`/`to` skips send and emits **WARN** `notification.failed` (`reason=not_configured`); checks still run and persist.
+- **SMS with missing Twilio config**: same pattern with `reason=not_configured`.
 - **AlterLab off**: leave `ALTERLAB_API_KEY` empty. `AlterLabPriceClient.fetch` logs WARN and returns `Optional.empty()`; if Jsoup also fails, the row is `FAILED`.
 - **Gemini off**: leave `GEMINI_API_KEY` empty (or set `GEMINI_ENABLED=false`). The deterministic fallback summary still ships on every alert — no outbound HTTP, no upstream dependency on the alert path. See [Monitoring & alerts › AI-assisted change summary](monitoring-and-alerts.md#ai-assisted-change-summary).
 
@@ -65,6 +70,6 @@ The legacy top-level `slack.webhook-url` key was removed; use `app.notification.
 
 ## Test-profile overrides
 
-[application-test.yml](../src/test/resources/application-test.yml) replaces datasource with H2 (PostgreSQL mode), disables Flyway, sets JPA to `create-drop`, sets a dummy AlterLab key, disables the scheduler, sets `app.notification.type=noop` so tests do not emit Slack traffic or notifier noise, sets `app.ai.gemini.enabled=false` (with a blank `api-key`) to keep tests deterministic and offline — they exercise the deterministic fallback path instead, and mirrors `management.endpoints.web.exposure.include` with `show-details: never` for actuator.
+[application-test.yml](../src/test/resources/application-test.yml) replaces datasource with H2 (PostgreSQL mode), disables Flyway, sets JPA to `create-drop`, sets a dummy AlterLab key, disables the scheduler, excludes `MailSenderAutoConfiguration`, sets `app.notification.log.enabled`, `email.enabled`, and `sms.enabled` to `false` so tests do not emit SMTP/Twilio traffic or notifier noise, sets `app.ai.gemini.enabled=false` (with a blank `api-key`) to keep tests deterministic and offline — they exercise the deterministic fallback path instead, and mirrors `management.endpoints.web.exposure.include` with `show-details: never` for actuator.
 
 Regression tests use Mockito’s **subclass** mock maker via [mockito-extensions/org.mockito.plugins.MockMaker](../src/test/resources/mockito-extensions/org.mockito.plugins.MockMaker) so mocking concrete beans such as `CompositePriceFetcher` works on newer JDKs where the inline agent path is restricted.

@@ -5,18 +5,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "app.jsoup")
 public class JsoupClientProperties {
 
-    private int connectTimeoutMs = 10_000;
     private int readTimeoutMs = 15_000;
     private String userAgent =
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-
-    public int getConnectTimeoutMs() {
-        return connectTimeoutMs;
-    }
-
-    public void setConnectTimeoutMs(int connectTimeoutMs) {
-        this.connectTimeoutMs = connectTimeoutMs;
-    }
 
     public int getReadTimeoutMs() {
         return readTimeoutMs;

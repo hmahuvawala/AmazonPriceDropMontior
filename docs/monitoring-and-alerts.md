@@ -28,30 +28,30 @@ Outer loop catches `RuntimeException` from `checkSingleProduct`, logs at ERROR, 
 
 ### Subtleties
 - Whole call runs in **one transaction**. If a downstream throws something not caught (it is `catch RuntimeException`, so anything not subclassing it would escape — none of the current code throws checked exceptions out of `runChecksForActiveProducts`), all writes roll back.
-- The notifier call happens **inside** the transaction. With `NOTIFICATION_TYPE=slack`, a slow webhook holds the DB transaction open. `RestClientException` is caught inside `SlackNotifier` so it won't roll back the transaction.
+- The notifier call happens **inside** the transaction. Slow SMTP or Twilio calls hold the DB transaction open; `MailException` / `RestClientException` are caught inside [EmailNotifier](../src/main/java/com/amazonpricemonitor/service/notify/EmailNotifier.java) / [SmsNotifier](../src/main/java/com/amazonpricemonitor/service/notify/SmsNotifier.java) so they do not roll back the transaction.
 - Drop math uses `MathContext`, but the value compared to `thresholdPct` is **not** scale-normalized before `compareTo` — it works because `BigDecimal.compareTo` is scale-insensitive.
 - A drop of *exactly* `thresholdPct` or *exactly* `thresholdAmount` triggers the alert (`compareTo` uses `>=` on both branches).
 - New product / first run: no alert is ever sent on the first successful price. You get an alert only on the second-or-later success.
 - Failed checks do not reset the comparison baseline — drop is always vs the most recent **success**, even if many failures intervened.
 
-## Notifications (`app.notification.type`)
+## Notifications (multi-channel)
 
-Exactly **one** [`Notifier`](../src/main/java/com/amazonpricemonitor/service/notify/Notifier.java) bean is active, selected by `NOTIFICATION_TYPE` / `app.notification.type`:
+[`PriceMonitoringService`](../src/main/java/com/amazonpricemonitor/service/PriceMonitoringService.java) injects the [`Notifier`](../src/main/java/com/amazonpricemonitor/service/notify/Notifier.java) interface. The **primary** implementation is [`CompositeNotifier`](../src/main/java/com/amazonpricemonitor/service/notify/CompositeNotifier.java), which fans out to every active [`ChannelNotifier`](../src/main/java/com/amazonpricemonitor/service/notify/ChannelNotifier.java) bean. Each channel is toggled independently; one channel failing does not suppress the others (failures are **WARN** logged from the composite).
 
-| Type | Bean | Behavior |
-|------|------|------------|
-| `log` (default) | [LogNotifier](../src/main/java/com/amazonpricemonitor/service/notify/LogNotifier.java) | **INFO** `notification.sent` (MDC `channel=log` + prices/drops/triggers/method). No outbound HTTP. |
-| `slack` | [SlackNotifier](../src/main/java/com/amazonpricemonitor/service/notify/SlackNotifier.java) | POST `{"text":"..."}` to `app.notification.slack.webhook-url` (env `SLACK_WEBHOOK_URL`). **INFO** `notification.sent` on HTTP success; **WARN** `notification.failed` on errors or if the webhook URL is blank (`reason=webhook_not_configured`). |
-| `noop` | [NoopNotifier](../src/main/java/com/amazonpricemonitor/service/notify/NoopNotifier.java) | Swallows alerts (tests / explicit off) — no notifier log lines. |
+| Channel | Bean | `app.notification.*` flag | Behavior |
+|---------|------|---------------------------|----------|
+| Log (default on) | [LogNotifier](../src/main/java/com/amazonpricemonitor/service/notify/LogNotifier.java) | `log.enabled` (`NOTIFY_LOG_ENABLED`, default `true`) | **INFO** `notification.sent` (MDC `channel=log` + prices/drops/triggers/method + optional `aiSummary`). No outbound HTTP. |
+| Email | [EmailNotifier](../src/main/java/com/amazonpricemonitor/service/notify/EmailNotifier.java) | `email.enabled` (`NOTIFY_EMAIL_ENABLED`) | Plain-text `SimpleMailMessage` via `JavaMailSender` when `spring.mail.*` is configured (`MAIL_HOST`, etc.). **INFO** `notification.sent` / **WARN** `notification.failed` (`channel=email`, `reason=not_configured` \| `mail_error`). Requires non-blank `from` / `to` (`NOTIFY_EMAIL_FROM`, comma-separated `NOTIFY_EMAIL_TO`). |
+| SMS (Twilio) | [SmsNotifier](../src/main/java/com/amazonpricemonitor/service/notify/SmsNotifier.java) | `sms.enabled` (`NOTIFY_SMS_ENABLED`) | `POST …/Accounts/{sid}/Messages.json` with Basic auth (`TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN`), form body `From` / `To` / `Body`. One HTTP call per comma-separated `NOTIFY_SMS_TO` number. Hard timeout via [`AppConfiguration#twilioRestClient`](../src/main/java/com/amazonpricemonitor/config/AppConfiguration.java). **INFO** `notification.sent` / **WARN** `notification.failed` (`channel=sms`, `reason=not_configured` \| `http_error`). |
 
-### [SlackNotifier](../src/main/java/com/amazonpricemonitor/service/notify/SlackNotifier.java)
+**All channels off:** if every flag is `false` and no channel beans exist, `CompositeNotifier` receives an empty delegate list and becomes a no-op (same effect as the old `noop` type).
 
-- Uses the shared `RestClient.Builder` from `AppConfiguration` (no custom timeouts — JDK defaults apply).
-- Message includes prev → new prices, **percent and absolute** drop, which threshold(s) tripped (`PCT` / `ABS` / `PCT+ABS`), fetch method, a `<url|Open listing>` link, and (when non-blank) a `_7-day summary:_ …` line generated by [`PriceChangeSummaryService`](../src/main/java/com/amazonpricemonitor/service/ai/PriceChangeSummaryService.java).
-- Currency is always rendered as `"USD"` in the Slack body regardless of `quote.currency()` — the persisted row keeps the actual currency.
-- `escapeSlack` only handles `&`, `<`, `>`; the AI summary string is run through it before being appended so a misbehaving model output cannot inject Slack mrkdwn link/control tokens. URLs in the link slot are not escaped — fine for Amazon URLs but a hostile `displayName` could not break out (escaped), though a malicious URL could.
-- Body is `{"text": "..."}` — plain text webhook payload, not blocks.
-- POST failure is caught (`RestClientException`) and logged as **WARN** `notification.failed` (`channel=slack`, `reason=http_error`); the price-check row stays committed.
+### Message content (email + SMS)
+
+- Body includes prev → new prices, **percent and absolute** drop, which threshold(s) tripped (`PCT` / `ABS` / `PCT+ABS`), fetch method, listing URL, and (when non-blank) a **7-day summary** block from [`PriceChangeSummaryService`](../src/main/java/com/amazonpricemonitor/service/ai/PriceChangeSummaryService.java).
+- Currency is always rendered as `"USD"` in the notification text regardless of `quote.currency()` — the persisted row keeps the actual currency.
+- **SMS body cap:** total body length is capped at **320 characters** (~2 GSM segments). The core price facts are preserved; the AI summary tail is truncated or omitted if needed so per-alert SMS cost stays bounded.
+- **Email** ships the full summary text when present (no HTML escaping beyond what the mail stack does for plain text).
 
 ## AI-assisted change summary
 
@@ -61,7 +61,7 @@ Threshold-breach notifications include a 1–2 sentence narrative of the trailin
 |------|----------------|
 | [`GeminiProperties`](../src/main/java/com/amazonpricemonitor/service/ai/GeminiProperties.java) | Typed `app.ai.gemini.*` config (`enabled`, `apiKey`, `model`, `baseUrl`, `timeoutMs`, `maxOutputTokens`). |
 | [`PriceTrendStats`](../src/main/java/com/amazonpricemonitor/service/ai/PriceTrendStats.java) | Immutable record carrying the deterministic numbers passed to the LLM. |
-| [`GeminiClient`](../src/main/java/com/amazonpricemonitor/service/ai/GeminiClient.java) | REST adapter for `generateContent`. Bounded by a hard connect+read timeout (`SimpleClientHttpRequestFactory`); never throws — failures are logged with `event=gemini.call.failure` and yield `Optional.empty()`. The configured `RestClient` is built in [`AppConfiguration#geminiRestClient`](../src/main/java/com/amazonpricemonitor/config/AppConfiguration.java) so timeouts apply once and the shared `RestClient.Builder` (used by Slack) is not mutated. |
+| [`GeminiClient`](../src/main/java/com/amazonpricemonitor/service/ai/GeminiClient.java) | REST adapter for `generateContent`. Bounded by a hard connect+read timeout (`SimpleClientHttpRequestFactory`); never throws — failures are logged with `event=gemini.call.failure` and yield `Optional.empty()`. The configured `RestClient` is built in [`AppConfiguration#geminiRestClient`](../src/main/java/com/amazonpricemonitor/config/AppConfiguration.java) so timeouts apply once and the shared `RestClient.Builder` is not mutated. |
 | [`PriceChangeSummaryService`](../src/main/java/com/amazonpricemonitor/service/ai/PriceChangeSummaryService.java) | Pulls the last-7-days `price_check` rows via `findByProductIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc`, computes `PriceTrendStats` in pure Java, calls `GeminiClient`, sanitizes/caps the response, and renders a deterministic fallback when Gemini is unavailable, off, blocked, or returns empty/blank text. |
 
 ### Accuracy strategy
@@ -83,8 +83,11 @@ Threshold-breach notifications include a 1–2 sentence narrative of the trailin
 
 ### Log format
 
-- [logback-spring.xml](../src/main/resources/logback-spring.xml): **non-`test`** profiles use **JSON** lines (`net.logstash.logback:logstash-logback-encoder`) so each log event is one object (message, level, logger, stack trace, **MDC** map). The **`test`** profile uses a **plain pattern** layout for readable surefire output.
-- **Trade-off:** JSON improves aggregation (`jq`, Loki, ELK); raw `tail -f` without tooling is harder than plain text.
+- [logback-spring.xml](../src/main/resources/logback-spring.xml) defines three profile-driven encoders:
+  - **Default (no `test`, no `json`)** — single-line pattern `%d{HH:mm:ss.SSS} %-5level %logger{0} {%mdc} - %msg%n%ex`. Each line carries the full **MDC** map inline as `{key=value, key=value}` (collapsed to `{-}` when MDC is empty), so `event=`, `runId=`, `productId=`, etc. are scannable in `tail -f` / `docker logs`. Optimized for terminal reading.
+  - **`json` profile** (opt-in via `SPRING_PROFILES_ACTIVE=json`) — `net.logstash.logback:logstash-logback-encoder` emits one JSON object per event (message, level, logger, stack trace, MDC map). Use this in prod / when shipping to Loki / ELK / Datadog.
+  - **`test` profile** — plain pattern with thread + FQCN, tuned for readable Surefire output.
+- **Trade-off:** the default pattern is human-friendly but lossy for parsers (commas inside MDC values, no schema). Switch to `json` for any aggregation or `jq`-driven analysis.
 
 ### MDC keys (price-check run)
 
@@ -108,8 +111,8 @@ Single-threaded scheduler + synchronous `runChecksForActiveProducts` keeps MDC c
 | WARN | `price.check.failure` | `cause=both_fetchers_empty` before persisting a `FAILED` row when both fetchers return empty; or `cause=unexpected` + ERROR stack when an uncaught `RuntimeException` escapes per-product logic. |
 | INFO | `price.check.success` | Successful scrape persisted; MDC includes `fetchMethod`, `price`, `currency`, `alerted`, and `dropPct` / `dropAmount` when a drop vs prior success was computed. |
 | INFO | `price.check.run.summary` | End of run: `duration_ms`, `attempted`, `success`, `failure`, `alerted` (successful scrapes vs fetch/other failures vs notifier invocations). |
-| INFO | `notification.sent` | [LogNotifier](../src/main/java/com/amazonpricemonitor/service/notify/LogNotifier.java) (MDC includes `aiSummary` when present) / successful [SlackNotifier](../src/main/java/com/amazonpricemonitor/service/notify/SlackNotifier.java) POST (`channel=log` or `slack`). |
-| WARN | `notification.failed` | Slack not configured (`reason=webhook_not_configured`) or HTTP delivery error (`reason=http_error`). |
+| INFO | `notification.sent` | [LogNotifier](../src/main/java/com/amazonpricemonitor/service/notify/LogNotifier.java) (`channel=log`) / successful email send (`channel=email`) / successful Twilio accept (`channel=sms`). |
+| WARN | `notification.failed` | Email: `reason=not_configured` \| `mail_error`. SMS: `reason=not_configured` \| `http_error`. |
 | INFO | `gemini.call.success` | Gemini returned usable text for the 7-day summary; `latencyMs` recorded. |
 | WARN | `gemini.call.failure` | Gemini call failed: `reason=http_error` (4xx/5xx/transport), `empty_candidates`, or `unexpected`. Always non-fatal — deterministic fallback ships. |
 | WARN | `ai.summary.skipped` | Prompt serialization or unexpected exception in `PriceChangeSummaryService` / `PriceMonitoringService`; minimal fallback string is sent so the alert still goes out. |

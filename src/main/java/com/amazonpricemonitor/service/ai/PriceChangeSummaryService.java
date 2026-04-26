@@ -135,8 +135,6 @@ public class PriceChangeSummaryService {
         BigDecimal sum = BigDecimal.ZERO;
         BigDecimal oldest = null;
         BigDecimal latest = null;
-        Instant oldestAt = null;
-        Instant latestAt = null;
         String currency = null;
         int success = 0;
         int failures = 0;
@@ -149,10 +147,8 @@ public class PriceChangeSummaryService {
             BigDecimal price = check.getPriceAmount();
             if (oldest == null) {
                 oldest = price;
-                oldestAt = check.getCreatedAt();
             }
             latest = price;
-            latestAt = check.getCreatedAt();
             currency = check.getCurrency();
             sum = sum.add(price);
             if (min == null || price.compareTo(min) < 0) {
@@ -167,7 +163,7 @@ public class PriceChangeSummaryService {
         if (success == 0) {
             return Optional.of(new PriceTrendStats(
                     null, null, null, null, null, null, null,
-                    checksAsc.size(), 0, failures, null, WINDOW_DAYS, null, null));
+                    checksAsc.size(), 0, failures, null, WINDOW_DAYS));
         }
 
         BigDecimal avg = sum.divide(BigDecimal.valueOf(success), 2, RoundingMode.HALF_UP);
@@ -191,9 +187,7 @@ public class PriceChangeSummaryService {
                 success,
                 failures,
                 currency,
-                WINDOW_DAYS,
-                oldestAt,
-                latestAt));
+                WINDOW_DAYS));
     }
 
     private String buildUserJson(MonitoredProduct product, PriceTrendStats stats)
