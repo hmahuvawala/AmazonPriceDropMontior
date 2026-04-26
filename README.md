@@ -108,6 +108,8 @@ Environment variables map to `src/main/resources/application.yml`. See `.env.exa
 
 - **Drop detection** compares the new successful price to the **previous successful** check for the same product, then fires configured notifier channels if **either** threshold is met: percent drop **≥** `thresholdPct` (when set) **or** dollar drop **≥** `thresholdAmount` (when set).
 - Failed checks are stored with `fetchMethod` **`FAILED`** when neither Jsoup nor AlterLab returns a price.
+- See [`docs/DESIGN-DOC.md`](docs/DESIGN-DOC.md) for the project design document covering motivation, approach, tech stack, tradeoffs, and future enhancements.
+- See [`docs/AI-NOTES.md`](docs/AI-NOTES.md) for a short reflection on what the AI assistant got wrong or oversimplified during the build and how those issues were caught and fixed.
 
 ## License
 

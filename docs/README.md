@@ -7,6 +7,7 @@ This `docs/` directory is a token-efficient briefing for future agents working o
 | You are about to… | Read |
 |---|---|
 | Get oriented / first time in this repo | [overview.md](overview.md) |
+| Review the project motivation, design approach, tradeoffs, or future enhancements | [DESIGN-DOC.md](DESIGN-DOC.md) |
 | Build, run, or write tests | [build-and-run.md](build-and-run.md) |
 | Touch any `application.yml`, env var, or `*Properties` class | [configuration.md](configuration.md) |
 | Add/alter a column, index, entity, or repository | [domain-and-db.md](domain-and-db.md) |
